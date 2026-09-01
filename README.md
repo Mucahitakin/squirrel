@@ -57,7 +57,7 @@ const openai = wrapOpenAI(new OpenAI(), run);      // every call → a traced tu
 ```
 
 Not on Node? Any language can integrate over the documented
-[wire protocol](sdk/README.md#wire-protocol) — a single
+[wire protocol](https://www.npmjs.com/package/squirrel-trace#wire-protocol) — a single
 `POST /api/ingest` endpoint (see the zero-dependency Python example pattern in
 the SDK docs).
 
@@ -83,16 +83,15 @@ SQUIRREL_HOST=0.0.0.0 SQUIRREL_PORT=4590 SQUIRREL_DATA_DIR=/var/lib/squirrel nod
 ## Development
 
 ```bash
-npm install       # workspaces: app + sdk + packages
+npm install
 npm start         # Electron desktop app
 npm run server    # headless server only
 npm test          # end-to-end smoke suite (mock chat API + real server)
 npm run dist      # build macOS + Windows installers (electron-builder)
 ```
 
-Repo layout: [`app/`](app) desktop app & server · [`sdk/`](sdk) the
-`squirrel-trace` npm package · [`packages/squirrel-trace-connect`](packages/squirrel-trace-connect)
-integrations · [`test/`](test) e2e suite.
+Repo layout: [`app/`](app) desktop app & server · [`test/`](test) e2e suite.
+The SDKs are developed separately and published on npm.
 
 ## License
 
