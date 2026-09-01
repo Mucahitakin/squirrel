@@ -1,7 +1,7 @@
 {
   "name": "squirrel-app",
   "productName": "Squirrel",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Squirrel — local, open-source LLM observability and testing desktop app (runs, traces, monitoring, datasets, projects).",
   "private": true,
   "type": "module",
@@ -67,7 +67,17 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true
+      "createDesktopShortcut": true,
+      "artifactName": "Squirrel-Setup.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Mucahitakin",
+      "repo": "squirrel",
+      "releaseType": "release"
+    },
+    "dmg": {
+      "artifactName": "Squirrel-${arch}.${ext}"
     }
   },
   "author": "Mucahit Akin",
@@ -80,5 +90,8 @@
     "electron-builder": "^26.15.3",
     "squirrel-trace": "^0.6.0",
     "squirrel-trace-connect": "^0.2.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
   }
 }

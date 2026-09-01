@@ -79,6 +79,44 @@ function createWindow(port) {
   return win;
 }
 
+// ---- otomatik güncelleme (GitHub Releases üzerinden) ----
+// Windows: yeni sürüm arka planda iner, kullanıcı onayıyla ya da çıkışta kurulur.
+// macOS: imzasız uygulamada sessiz kurulum yapılamaz (Apple kısıtı) —
+// bildirim gösterilir ve indirme sayfası açılır; imzalama eklenince
+// bu dal da tam otomatik kuruluma çevrilebilir.
+async function setupAutoUpdate(win) {
+  if (!app.isPackaged) return;
+  let autoUpdater;
+  try {
+    const mod = await import('electron-updater');
+    autoUpdater = mod.autoUpdater || mod.default?.autoUpdater;
+  } catch (error) { log('güncelleyici yüklenemedi:', error.message); return; }
+  if (!autoUpdater) return;
+  autoUpdater.on('error', (error) => log('güncelleme hatası:', String(error?.message || error)));
+  if (process.platform === 'darwin') {
+    autoUpdater.autoDownload = false;
+    autoUpdater.on('update-available', async (info) => {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'info', buttons: ['İndirme sayfasını aç', 'Daha sonra'], defaultId: 0, cancelId: 1,
+        message: `Yeni sürüm hazır: Squirrel ${info.version}`,
+        detail: 'Yeni sürümü indirip mevcut uygulamanın üzerine sürükleyerek güncelleyebilirsin.',
+      });
+      if (response === 0) shell.openExternal('https://github.com/Mucahitakin/squirrel/releases/latest');
+    });
+  } else {
+    autoUpdater.on('update-downloaded', async (info) => {
+      const { response } = await dialog.showMessageBox(win, {
+        type: 'info', buttons: ['Şimdi yeniden başlat', 'Çıkışta kur'], defaultId: 0, cancelId: 1,
+        message: `Güncelleme indirildi: Squirrel ${info.version}`,
+        detail: 'Yeni sürüm, uygulama yeniden başlatıldığında kurulur.',
+      });
+      if (response === 0) autoUpdater.quitAndInstall();
+    });
+  }
+  try { await autoUpdater.checkForUpdates(); } catch { /* ağ yok / release yok */ }
+  setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 4 * 60 * 60 * 1000);
+}
+
 app.whenReady().then(async () => {
   try {
     log('--- Squirrel başlıyor', app.getVersion(), 'electron', process.versions.electron);
@@ -118,9 +156,10 @@ app.whenReady().then(async () => {
     } else {
       log('açık Squirrel sunucusu bulundu, port', chosen);
     }
-    createWindow(chosen);
+    const win = createWindow(chosen);
     app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(chosen); });
     log('pencere açıldı');
+    setupAutoUpdate(win).catch((error) => log('güncelleyici hatası:', error.message));
   } catch (error) { fatal(error); }
 });
 
