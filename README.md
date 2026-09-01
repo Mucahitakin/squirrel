@@ -28,8 +28,9 @@ Grab the installer from **[Releases](../../releases/latest)**:
 | macOS (Intel) | `Squirrel-<version>.dmg` |
 | Windows | `Squirrel Setup <version>.exe` |
 
-The builds are currently unsigned: on macOS right-click → Open the first time;
-on Windows choose “More info → Run anyway” at the SmartScreen prompt.
+The builds are not notarized yet: on macOS right-click → Open the first time
+(if macOS still refuses, run `xattr -cr /Applications/Squirrel.app` once); on
+Windows choose “More info → Run anyway” at the SmartScreen prompt.
 
 ## Send data from your app
 

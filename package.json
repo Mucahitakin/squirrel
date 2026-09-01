@@ -28,7 +28,6 @@
       "package.json"
     ],
     "mac": {
-      "identity": null,
       "category": "public.app-category.developer-tools",
       "icon": "build/icon.png",
       "target": [
@@ -78,7 +77,8 @@
     },
     "dmg": {
       "artifactName": "Squirrel-${arch}.${ext}"
-    }
+    },
+    "afterPack": "./build/afterPack.cjs"
   },
   "author": "Mucahit Akin",
   "license": "MIT",
