@@ -1,0 +1,86 @@
+{
+  "name": "squirrel-app",
+  "productName": "Squirrel",
+  "version": "2.2.0",
+  "description": "Squirrel — local, open-source LLM observability and testing desktop app (runs, traces, monitoring, datasets, projects).",
+  "private": true,
+  "type": "module",
+  "main": "app/main.mjs",
+  "workspaces": [
+    "sdk",
+    "packages/*"
+  ],
+  "scripts": {
+    "start": "electron .",
+    "server": "node app/server.mjs",
+    "test": "node test/run.mjs",
+    "check": "node --check app/server.mjs && node --check app/main.mjs && node --check app/ui/app.js && for f in app/lib/*.mjs sdk/index.mjs packages/*/*.mjs; do node --check \"$f\" || exit 1; done",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win"
+  },
+  "build": {
+    "appId": "ai.mymarketingmix.squirrel",
+    "productName": "Squirrel",
+    "asar": false,
+    "directories": {
+      "buildResources": "build",
+      "output": "dist/release"
+    },
+    "files": [
+      "app/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "identity": null,
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  },
+  "author": "Mucahit Akin",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^26.15.3"
+  }
+}

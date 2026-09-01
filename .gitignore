@@ -1,0 +1,19 @@
+# bağımlılıklar ve derleme çıktıları
+node_modules/
+dist/
+
+# kişisel yapılandırma ve gizli anahtarlar — asla commit edilmez
+.env
+config.json
+projects.json
+squirrel.log
+data/
+
+# eski yerel prototipler / başlatıcı
+/index*.html
+/Squirrel.app/
+
+# işletim sistemi / IDE
+.DS_Store
+.idea/
+__pycache__/

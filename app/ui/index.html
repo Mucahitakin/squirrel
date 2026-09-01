@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Squirrel</title>
+<link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<div id="titlebar">
+  <span class="brand"><span class="mark"><img src="/assets/squirrel.png" alt="" style="width:17px;height:17px;object-fit:contain"></span>Squirrel</span>
+  <span style="color:var(--faint)">/</span><span id="crumb" style="color:var(--muted);font-size:12px">Koşular</span>
+  <span class="livepill" id="livePill"><span class="pulse"></span>koşu sürüyor</span>
+  <div id="tbRight"><span class="repoChip" id="repoStat"></span></div>
+</div>
+<div id="progressBar"></div>
+<div id="shell">
+  <nav id="nav">
+    <div class="navItem" id="nvProj">
+      <svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>Projeler</div>
+    <div class="navItem" id="nvLive">
+      <svg viewBox="0 0 24 24"><path d="M8 6l10 6-10 6V6z"/></svg>Canlı Test</div>
+    <div class="navItem active" id="nvRuns">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h9"/></svg>Koşular</div>
+    <div class="navItem" id="nvThr">
+      <svg viewBox="0 0 24 24"><path d="M21 11.5a7.5 7.5 0 0 1-7.5 7.5H6l-3 3V11.5A7.5 7.5 0 0 1 10.5 4h3A7.5 7.5 0 0 1 21 11.5z"/></svg>Threads</div>
+    <div class="navItem" id="nvComp">
+      <svg viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="14" rx="1.5"/><rect x="14" y="5" width="7" height="14" rx="1.5"/></svg>Karşılaştır</div>
+    <div class="navItem" id="nvMon">
+      <svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/></svg>Monitoring</div>
+    <div class="navItem" id="nvData">
+      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6"/><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6"/></svg>Dataset'ler</div>
+    <div class="navSpacer"></div>
+    <div class="navItem" id="nvSet">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7 7 0 0 0-2-1.2L14.2 3h-4L9.7 5.7a7 7 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.3-1a7 7 0 0 0 2 1.2L9.8 21h4l.5-2.7a7 7 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>Ayarlar</div>
+    <div class="navFoot">Squirrel v2</div>
+  </nav>
+
+  <!-- KOŞULAR -->
+  <div class="view on" id="vRuns">
+    <div class="workArea">
+      <div class="tableWrap">
+        <div class="pageHead">
+          <h2 id="runsTitle">Koşular</h2>
+          <select class="runPicker" id="runPicker" style="width:auto"></select>
+          <span id="runProjBadge" style="display:none;align-items:center;gap:6px;font-size:11px;background:var(--accent-soft);color:#a9bcff;border-radius:6px;padding:3px 10px;font-weight:600">
+            <span id="runProjName"></span><span id="runProjClear" style="cursor:pointer">✕</span></span>
+          <input id="runFilterText" placeholder="filtrele…" style="width:140px">
+          <select class="runPicker" id="runFilterStatus" style="width:auto">
+            <option value="">Durum: tümü</option><option value="ok">tamamlandı</option>
+            <option value="err">hatalı</option><option value="warn">uyarı</option>
+            <option value="purple">soru/onay</option><option value="gray">diğer</option>
+          </select>
+          <select class="runPicker" id="runFilterTool" style="width:auto;max-width:170px"><option value="">Tool: tümü</option></select>
+          <select class="runPicker" id="runFilterTag" style="width:auto;max-width:150px;display:none"><option value="">Tag: tümü</option></select>
+          <div class="countPills" id="runCounts"></div>
+        </div>
+        <div class="tblScroll" id="runsTableWrap"><div id="emptyMsg">Henüz koşu yok.<br>Canlı Test'ten bir koşu başlat; biten her koşu burada birikir.</div></div>
+      </div>
+      <div id="trace">
+        <div class="head"><b>TRACE</b><span class="tot" id="traceTot"></span></div>
+        <div id="spanTree"></div>
+      </div>
+      <div id="detail">
+        <div id="dHead"><b id="dTitle">—</b><span class="pill p-gray" id="dBadge"><span class="d"></span>—</span>
+          <button id="detailClose">✕</button></div>
+        <div id="dSplit"><div id="dMain"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- THREADS -->
+  <div class="view" id="vThr">
+    <aside id="thrSide">
+      <input id="thrSearch" placeholder="thread ara…">
+      <div id="thrList"></div>
+    </aside>
+    <div class="workArea">
+      <div class="tableWrap">
+        <div class="pageHead">
+          <h2 id="thrTitle">Threads</h2>
+          <span class="sub" id="thrSub">soldan bir konuşma seç</span>
+        </div>
+        <div class="tblScroll" id="thrChat">
+          <div id="emptyThr" style="margin:60px auto;text-align:center;color:var(--faint);font-size:12.5px;max-width:400px;line-height:1.7">
+            Turlar thread'e göre gruplanır; bir konuşmayı seçince<br>
+            baştan sona chat balonları halinde okursun.<br>Balonun altındaki <b>izi aç</b> ile o turun trace'ine geçersin.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KARŞILAŞTIR -->
+  <div class="view" id="vComp">
+    <div class="workArea">
+      <div class="tableWrap">
+        <div class="pageHead">
+          <h2>Karşılaştır</h2>
+          <select class="runPicker" id="cmpA" style="width:auto;max-width:250px"></select>
+          <span style="color:var(--faint);font-weight:700;font-size:11px">vs</span>
+          <select class="runPicker" id="cmpB" style="width:auto;max-width:250px"></select>
+          <button class="btnPrimary" style="width:auto;padding:6px 16px" id="cmpGo">Karşılaştır</button>
+          <label class="switch" style="margin-left:auto"><input type="checkbox" id="cmpOnlyDiff"> sadece farklılar</label>
+        </div>
+        <div class="tblScroll" id="cmpWrap">
+          <div id="emptyCmp" style="margin:60px auto;text-align:center;color:var(--faint);font-size:12.5px;max-width:420px;line-height:1.7">
+            Aynı dataset'in iki koşusunu seç ve <b>Karşılaştır</b>'a bas.<br>
+            Turlar madde numarasına göre hizalanır; çıktı ve durum farkları işaretlenir.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANLI -->
+  <div class="view" id="vLive">
+    <aside id="liveSide">
+      <div><label>Motor</label><select id="engine">
+        <option value="generic">Chat API (herhangi bir sistem)</option>
+        <option value="harness">Harness (repo betiği)</option>
+      </select></div>
+      <div><label>Dataset</label><select id="dataset"></select><div class="desc" id="datasetDesc"></div></div>
+      <div class="row2">
+        <div><label>Başlangıç</label><input id="from" type="number" min="1" placeholder="1"></div>
+        <div><label>Bitiş</label><input id="to" type="number" min="1" placeholder="son"></div>
+      </div>
+      <div id="harnessFields" style="display:none;flex-direction:column;gap:11px">
+        <label class="switch"><input type="checkbox" id="multiThread"> Her konu ayrı thread</label>
+        <div><label>Devam thread (ops.)</label><input id="thread" placeholder="1787…"></div>
+        <div><label>Oturum çerezi (_sid)</label><input id="token" type="password" placeholder="_sid değeri"></div>
+        <div><label>API adresi</label><input id="base" value="http://localhost:3009/api"></div>
+      </div>
+      <div id="genericFields" style="display:flex;flex-direction:column;gap:11px">
+        <div><label>Chat endpoint (POST)</label><input id="genUrl" placeholder="https://api.sistemim.com/chat"></div>
+        <div><label>Kimlik doğrulama</label><select id="genAuthType">
+          <option value="none">Yok</option>
+          <option value="api_key">API anahtarı (başlık)</option>
+          <option value="bearer">Bearer token</option>
+          <option value="cookie">Session / çerez</option>
+          <option value="basic">Basic (kullanıcı + şifre)</option>
+          <option value="header">Özel başlık</option>
+          <option value="refresh">Refresh token akışı</option>
+        </select></div>
+        <div class="authPane" id="apApiKey" style="display:none"><div class="row2">
+          <div><label>Başlık adı</label><input id="genKeyHeader" value="x-api-key"></div>
+          <div><label>API anahtarı</label><input id="genKeyValue" type="password" placeholder="sk-..."></div>
+        </div></div>
+        <div class="authPane" id="apBearer" style="display:none">
+          <label>Token</label><input id="genBearer" type="password" placeholder="eyJhbGciOi...">
+        </div>
+        <div class="authPane" id="apCookie" style="display:none"><div class="row2">
+          <div><label>Çerez adı</label><input id="genCookieName" value="session_id"></div>
+          <div><label>Session değeri</label><input id="genCookieValue" type="password" placeholder="çerez değeri"></div>
+        </div></div>
+        <div class="authPane" id="apBasic" style="display:none"><div class="row2">
+          <div><label>Kullanıcı</label><input id="genBasicUser"></div>
+          <div><label>Şifre</label><input id="genBasicPass" type="password"></div>
+        </div></div>
+        <div class="authPane" id="apHeader" style="display:none"><div class="row2">
+          <div><label>Başlık adı</label><input id="genAuthH" placeholder="Authorization"></div>
+          <div><label>Değeri</label><input id="genAuthV" type="password" placeholder="Bearer ..."></div>
+        </div></div>
+        <div class="authPane" id="apRefresh" style="display:none;flex-direction:column;gap:11px">
+          <div><label>Token endpoint (POST)</label><input id="genTokUrl" placeholder="https://api.sistemim.com/auth/refresh"></div>
+          <div class="row2">
+            <div><label>Refresh token</label><input id="genRefTok" type="password"></div>
+            <div><label>Gövde alanı</label><input id="genRefField" value="refresh_token"></div>
+          </div>
+          <div><label>Access token yolu (cevapta)</label><input id="genAccPath" value="access_token"></div>
+        </div>
+        <div class="row2">
+          <div><label>Mesaj alanı</label><input id="genMsgField" value="message"></div>
+          <div><label>Thread alanı (ops.)</label><input id="genThreadField" placeholder="thread_id"></div>
+        </div>
+        <div class="row2">
+          <div><label>Cevap yolu (ops.)</label><input id="genReplyPath" placeholder="data.reply"></div>
+          <div><label>Zaman aşımı (sn)</label><input id="genTimeout" type="number" value="120"></div>
+        </div>
+        <div><label>Ek başlıklar (ops., satır başına <code>Ad: değer</code>)</label><textarea id="genHeaders" rows="2" style="width:100%;background:var(--card2);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:8px 10px;font:11px var(--mono);resize:vertical"></textarea></div>
+        <div><label>Ek gövde JSON (ops.)</label><input id="genBodyExtra" placeholder='{"model":"gpt-4o"}' style="font-family:var(--mono);font-size:11px"></div>
+        <div><label>Kayıt projesi</label><select id="genProject"></select></div>
+      </div>
+      <button class="btnPrimary" id="btnStart">Testi Başlat</button>
+      <button class="btnDanger" id="btnStop">Durdur</button>
+      <div class="statGrid">
+        <div class="statCard"><b id="stTotal">–</b><span>toplam</span></div>
+        <div class="statCard"><b id="stDone" style="color:var(--ok)">0</b><span>bitti</span></div>
+        <div class="statCard"><b id="stErr" style="color:var(--err)">0</b><span>sorunlu</span></div>
+      </div>
+      <div id="exportBox"><b>Sonuç JSON masaüstünde</b><div id="exportPath"></div></div>
+    </aside>
+    <div class="workArea">
+      <div class="tableWrap">
+        <div class="pageHead"><h2>Canlı Test</h2><span class="sub" id="liveSub">koşu bekleniyor</span></div>
+        <div class="tblScroll" id="liveTableWrap">
+          <div id="emptyLive" style="margin:60px auto;text-align:center;color:var(--faint);font-size:12.5px;max-width:380px;line-height:1.7">
+            Soldan dataset'i ve endpoint'ini seç, kimlik doğrulama yöntemini belirle ve başlat.<br>
+            Her tur tabloya canlı düşer; satıra tıklayınca sağda iz ağacı ve detay açılır.</div>
+        </div>
+        <div id="logbar"><button id="logtoggle">▸ teknik log</button><div id="logs"></div></div>
+      </div>
+      <!-- canlıda da aynı trace/detay panelleri kullanılır (JS taşır) -->
+    </div>
+  </div>
+
+  <!-- PROJELER -->
+  <div class="view" id="vProj">
+    <div class="workArea"><div class="tableWrap">
+      <div class="pageHead">
+        <h2>Projeler</h2>
+        <input id="pjSearch" placeholder="ara…" style="width:200px">
+        <button class="btnPrimary" style="width:auto;padding:7px 14px;margin-left:auto" id="pjNewBtn">+ Proje</button>
+      </div>
+      <div id="pjNewForm" style="display:none;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--card)">
+        <div class="row2" style="max-width:680px">
+          <div><label>Proje adı</label><input id="pjNewName" placeholder="orn: chatbot-prod"></div>
+          <div style="flex:2"><label>Açıklama</label><input id="pjNewDesc" placeholder="hangi sistem gönderiyor?"></div>
+        </div>
+        <div style="margin-top:9px;display:flex;gap:8px;align-items:center">
+          <button class="btnPrimary" style="width:auto;padding:6px 14px" id="pjNewSave">Oluştur</button>
+          <span id="pjNewNote" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="tblScroll" id="pjListWrap"></div>
+    </div></div>
+  </div>
+
+  <!-- MONITORING -->
+  <div class="view" id="vMon">
+    <div class="workArea"><div class="tableWrap">
+      <div class="pageHead"><h2>Monitoring</h2><span class="sub" id="monSub"></span>
+        <select class="runPicker" id="monProject" style="width:auto;margin-left:auto"><option value="">Tüm projeler</option></select>
+        <select class="runPicker" id="monGroup" style="width:auto">
+          <option value="run">Koşuya göre</option>
+          <option value="thread">Thread'e göre</option>
+        </select>
+        <div style="position:relative">
+          <button id="monThreadBtn" class="btn">Thread seç <span id="monThreadCount" style="color:var(--accent)"></span></button>
+          <div id="monThreadMenu" style="display:none;position:absolute;right:0;top:34px;z-index:40;background:var(--surface);border:1px solid var(--line2);border-radius:10px;min-width:290px;max-height:320px;overflow-y:auto;padding:8px;box-shadow:0 12px 34px rgba(0,0,0,.5)">
+            <div style="display:flex;gap:8px;margin-bottom:6px">
+              <button id="monThreadAll" style="background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;font-weight:600">tümü</button>
+              <button id="monThreadNone" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-weight:600">temizle</button>
+            </div>
+            <div id="monThreadList"></div>
+          </div>
+        </div>
+        <button id="monRefresh" class="btn ghost">Yenile</button></div>
+      <div class="tblScroll" style="padding:18px">
+        <div class="statGrid" style="grid-template-columns:repeat(5,1fr);max-width:980px;margin-bottom:18px">
+          <div class="statCard"><b id="mRuns">–</b><span>koşu</span></div>
+          <div class="statCard"><b id="mTurns">–</b><span>tur</span></div>
+          <div class="statCard"><b id="mRate" style="color:var(--ok)">–</b><span>başarı</span></div>
+          <div class="statCard"><b id="mTok">–</b><span>token (≈)</span></div>
+          <div class="statCard"><b id="mTools">–</b><span>tool çağrısı</span></div>
+        </div>
+        <div id="monCharts" style="display:flex;flex-direction:column;gap:16px;max-width:980px"></div>
+        <div id="monTip" style="position:fixed;display:none;background:#0a0d13;border:1px solid var(--line2);border-radius:8px;padding:6px 10px;font:11px var(--mono);color:#c3cfe2;pointer-events:none;z-index:50"></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- DATASET'LER -->
+  <div class="view" id="vData">
+    <div class="workArea"><div class="tableWrap">
+      <div class="pageHead" id="dsListHead">
+        <h2>Dataset'ler</h2>
+        <input id="dsSearch" placeholder="ara…" style="width:200px">
+        <button class="btnPrimary" style="width:auto;padding:7px 14px;margin-left:auto" id="dsNewBtn">+ Dataset</button>
+      </div>
+      <div id="dsCreate" style="display:none;flex:1;min-height:0;flex-direction:column;overflow-y:auto">
+        <div class="pageHead">
+          <h2>Dataset</h2>
+          <div style="margin-left:auto;display:flex;gap:8px">
+            <button id="dsCreateCancel" class="btn ghost">Vazgeç</button>
+            <button class="btnPrimary" style="width:auto;padding:6px 18px" id="dsCreateSave">Oluştur</button>
+          </div>
+        </div>
+        <div style="padding:0 18px;border-bottom:1px solid var(--line);display:flex;gap:2px">
+          <div class="dTab on" id="dcTabFile">Dosyadan oluştur</div>
+          <div class="dTab" id="dcTabScratch">Sıfırdan oluştur</div>
+        </div>
+        <div style="padding:18px;max-width:880px">
+          <div class="row2" style="margin-bottom:16px">
+            <div><label>Set adı</label><input id="dcName" placeholder="orn: agent-custom"></div>
+            <div style="flex:2"><label>Açıklama (opsiyonel)</label><input id="dcDesc" placeholder="bu set neyi test ediyor?"></div>
+          </div>
+
+          <div id="dcFilePane">
+            <div style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                <span style="font-size:12.5px">Şu kolonlara sahip bir <code>.csv</code>, <code>.json</code> veya <code>.jsonl</code> dosyası yükle:</span>
+                <div style="margin-left:auto;display:flex;border:1px solid var(--line2);border-radius:7px;overflow:hidden">
+                  <button id="dcFmtCsv" class="fmtBtn on">CSV</button><button id="dcFmtJson" class="fmtBtn">JSONL</button>
+                </div>
+              </div>
+              <div id="dcSample" style="font:11px var(--mono);background:#0a0d13;border:1px solid var(--line);border-radius:8px;padding:10px 12px;color:#9db2d6;white-space:pre-wrap"></div>
+              <div style="font-size:11px;color:var(--faint);margin-top:8px">Zorunlu kolon: <code>prompt</code> (veya <code>input</code>/<code>mesaj</code>). Opsiyonel: <code>category</code>, <code>thread</code>, <code>dep</code> (bağımlı olduğu madde no).</div>
+            </div>
+            <div id="dcDrop" style="border:1.5px dashed var(--line2);border-radius:14px;padding:52px 20px;text-align:center;cursor:pointer;transition:border-color .12s, background .12s">
+              <div style="width:44px;height:44px;margin:0 auto 12px;border-radius:11px;background:var(--card2);display:flex;align-items:center;justify-content:center">
+                <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:var(--muted);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+              </div>
+              <div style="font-size:13px"><span style="color:var(--accent);font-weight:600">Yüklemek için tıkla</span> ya da sürükleyip bırak</div>
+              <div style="font-size:11.5px;color:var(--faint);margin-top:4px">CSV, JSON veya JSONL</div>
+              <input type="file" id="dcFileInput" accept=".csv,.json,.jsonl,.txt" style="display:none">
+            </div>
+            <div id="dcPreview" style="display:none;margin-top:14px"></div>
+          </div>
+
+          <div id="dcScratchPane" style="display:none">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Boş bir set oluşturulur; maddeleri set detayındaki <b>+ Madde</b> ile teker teker eklersin.</div>
+          </div>
+        </div>
+      </div>
+      <div class="tblScroll" id="dsListWrap"></div>
+
+      <div id="dsDetail" style="display:none;flex:1;min-height:0;flex-direction:column">
+        <div class="pageHead">
+          <button id="dsBack" class="btn ghost sm">← geri</button>
+          <h2 id="dsDetailName"></h2>
+          <span class="sub" id="dsDetailSub"></span>
+          <button class="btnPrimary" style="width:auto;padding:6px 13px;margin-left:auto" id="dsRunBtn">Canlı'da koş</button>
+          <button id="dsAddBtn" class="btn">+ Madde</button>
+          <button id="dsDelBtn" class="btn danger">Seti sil</button>
+        </div>
+        <div id="dsAddForm" style="display:none;padding:12px 18px;border-bottom:1px solid var(--line);background:var(--card)">
+          <div id="dsFormTitle" style="font-size:11px;color:var(--faint);font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Yeni madde</div>
+          <div><label>Mesaj</label><textarea id="dsAddPrompt" rows="3" style="width:100%;background:var(--card2);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:8px 10px;font:12.5px inherit;resize:vertical"></textarea></div>
+          <div class="row2" style="margin-top:8px;max-width:760px">
+            <div><label>Kategori</label><input id="dsAddCat" placeholder="Genel"></div>
+            <div><label>Thread</label><input id="dsAddThread" placeholder="thread_yeni_konu"></div>
+            <div><label>Bağımlı olduğu # (ops.)</label><input id="dsAddDep" type="number" min="1"></div>
+          </div>
+          <div style="margin-top:9px;display:flex;gap:8px;align-items:center">
+            <button class="btnPrimary" style="width:auto;padding:6px 14px" id="dsAddSave">Ekle</button>
+            <span id="dsAddNote" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+        </div>
+        <div class="tblScroll" id="dsItemsWrap"></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- AYARLAR -->
+  <div class="view" id="vSettings">
+    <div class="inner">
+      <div class="settingCard">
+        <h3>Repo konumu</h3>
+        <p>marketing_mix reposunun tam yolu. Harness ve dataset'ler buradan okunur; Squirrel repoya yazmaz.</p>
+        <input id="cfgRepo" placeholder="~/Desktop/marketing_mix">
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button class="btnPrimary" style="width:auto;padding:7px 15px" id="cfgSave">Kaydet</button>
+          <span id="cfgNote" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="settingCard">
+        <h3>Canlı yansıtma</h3>
+        <p>Açıkken SDK/üretim verisi geldiği an arayüze düşer (SSE); kapalıyken sayfayı yenilediğinde görünür.</p>
+        <label class="switch"><input type="checkbox" id="cfgLive"> SDK verisini canlı yansıt</label>
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+          <button class="btnPrimary" style="width:auto;padding:6px 14px" id="cfgLiveSave">Kaydet</button>
+          <span id="cfgLiveNote" style="font-size:11px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="settingCard"><h3>Sonuç klasörü</h3><p id="cfgOut" style="font-family:var(--mono);font-size:10.5px"></p></div>
+      <div class="settingCard">
+        <h3>Kod ile entegrasyon (squirrel-trace SDK)</h3>
+        <p>Başka uygulamalar bu anahtar ile Squirrel'e koşu/tur gönderebilir; kayıtlar Koşular ve Monitoring'de görünür. SDK: <code>Squirrel/sdk</code> klasörü (npm'e yayınlanabilir).</p>
+        <label>Ingest adresi</label><input id="cfgIngest" readonly style="margin-bottom:8px">
+        <label>API anahtarı (x-api-key)</label>
+        <div style="display:flex;gap:8px"><input id="cfgKey" readonly><button id="cfgKeyCopy" class="btn">Kopyala</button></div>
+        <pre style="margin-top:10px;background:#0a0d13;border:1px solid var(--line);border-radius:8px;padding:10px;font:10.5px/1.6 var(--mono);color:#9db2d6;white-space:pre-wrap">import Squirrel from 'squirrel-trace';
+const sq = new Squirrel({ apiKey: 'ANAHTAR', project: 'uygulamam' });
+const run = sq.startRun();
+const turn = run.turn({ input: 'kullanıcı mesajı', thread: 'sohbet-1' });
+turn.tool('web.search').usage({ input: 1200, output: 240 });
+await turn.end({ output: 'asistan cevabı' });</pre>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/ui/app.js"></script>
+</body>
+</html>

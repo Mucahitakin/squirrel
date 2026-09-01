@@ -1,0 +1,40 @@
+{
+  "name": "squirrel-trace",
+  "version": "0.6.0",
+  "description": "Lightweight tracing SDK for Squirrel \u2014 send runs, turns, tool calls and token usage from any Node.js app to a local Squirrel instance for LLM observability.",
+  "type": "module",
+  "main": "./index.mjs",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.mjs"
+    }
+  },
+  "types": "./index.d.ts",
+  "files": [
+    "index.mjs",
+    "index.d.ts",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": false,
+  "keywords": [
+    "squirrel",
+    "tracing",
+    "observability",
+    "llm",
+    "agent",
+    "testing",
+    "evaluation",
+    "telemetry"
+  ],
+  "author": "Mucahit Akin",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check": "node --check index.mjs"
+  }
+}

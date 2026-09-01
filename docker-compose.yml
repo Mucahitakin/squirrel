@@ -1,0 +1,14 @@
+# Squirrel sunucu kurulumu:  docker compose up -d
+# Arayüz: http://SUNUCU:4590  — dışarı açmadan önce README'deki güvenlik notunu oku.
+services:
+  squirrel:
+    build: .
+    container_name: squirrel
+    restart: unless-stopped
+    ports:
+      - "4590:4590"
+    volumes:
+      - squirrel-data:/data
+
+volumes:
+  squirrel-data:
