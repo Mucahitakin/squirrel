@@ -11,7 +11,22 @@ permissions:
   contents: write
 
 jobs:
+  # Release'i tek bir iş önceden oluşturur; derleme işleri VAR OLAN release'e
+  # yükler. (İki derleme aynı anda "yoksa oluştur" derse aynı tag'e iki
+  # release açılıyor — v2.3.0'da yaşandı.)
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release for tag (if missing)
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 || \
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "Squirrel ${GITHUB_REF_NAME#v}" --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
+    needs: create-release
     strategy:
       matrix:
         os: [macos-latest, windows-latest]
