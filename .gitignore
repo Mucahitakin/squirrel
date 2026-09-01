@@ -17,3 +17,7 @@ data/
 .DS_Store
 .idea/
 __pycache__/
+
+# npm paketleri ayrı (private) repolarda yaşar; public repo yalnız uygulamadır
+/sdk/
+/packages/

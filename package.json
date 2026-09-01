@@ -6,15 +6,11 @@
   "private": true,
   "type": "module",
   "main": "app/main.mjs",
-  "workspaces": [
-    "sdk",
-    "packages/*"
-  ],
   "scripts": {
     "start": "electron .",
     "server": "node app/server.mjs",
     "test": "node test/run.mjs",
-    "check": "node --check app/server.mjs && node --check app/main.mjs && node --check app/ui/app.js && for f in app/lib/*.mjs sdk/index.mjs packages/*/*.mjs; do node --check \"$f\" || exit 1; done",
+    "check": "node --check app/server.mjs && node --check app/main.mjs && node --check app/ui/app.js && for f in app/lib/*.mjs; do node --check \"$f\" || exit 1; done",
     "dist:mac": "electron-builder --mac",
     "dist:win": "electron-builder --win",
     "dist": "electron-builder --mac --win"
@@ -81,6 +77,8 @@
   },
   "devDependencies": {
     "electron": "^33.0.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "squirrel-trace": "^0.6.0",
+    "squirrel-trace-connect": "^0.2.0"
   }
 }
