@@ -190,6 +190,49 @@ const stImp = await waitIdle();
 check('package.runs_without_repo', (stImp.results || []).length === 2 && stImp.results[0].agent_text.startsWith('paket:'));
 await post('/api/config', { repo_root: '' });
 
+// ---- 8. e2e-chat betiği düzensiz bir klasörde, dataset Squirrel'de ----
+// run-chat-suite.mjs sözleşmesini taklit eden sahte betik: dataset'i yalnız
+// kendi yanında ya da --file ile bulur, çıktısını betik/../../output'a yazar
+// ve '# cikti=' ile bildirir; ekleri attachment.url'den okur.
+const loose = pathm.join(SANDBOX, 'rastgele-klasor');
+fsm.mkdirSync(loose, { recursive: true });
+fsm.writeFileSync(pathm.join(loose, 'run-chat-suite.mjs'), `
+import fs from 'node:fs'; import path from 'node:path';
+const args = process.argv.slice(2); const get = (n) => { const i = args.indexOf('--' + n); return i < 0 ? null : args[i + 1]; };
+const HARNESS_DIR = path.dirname(new URL(import.meta.url).pathname);
+const ROOT = path.resolve(HARNESS_DIR, '../..');
+const ds = get('dataset'); const fileArg = get('file');
+const FILE = fileArg ? path.resolve(ROOT, fileArg) : path.join(HARNESS_DIR, 'datasets', ds, 'conversation_dataset.json');
+if (!fs.existsSync(FILE)) { console.error('Mesaj dosyasi yok: ' + FILE); process.exit(1); }
+const suite = fileArg ? path.basename(fileArg, path.extname(fileArg)) : ds;
+const out = path.join(ROOT, 'output', 'e2e-chat', suite, String(Date.now()));
+fs.mkdirSync(out, { recursive: true });
+console.log('# cikti=' + path.relative(ROOT, out));
+for (const it of JSON.parse(fs.readFileSync(FILE, 'utf8'))) {
+  console.log('[' + it.id + '] gonderiliyor');
+  const att = (it.attachments || []).every((a) => fs.existsSync(String(a.url || '').replace(/^file:\\/\\//, '')));
+  fs.appendFileSync(path.join(out, 'results.jsonl'), JSON.stringify({ index: it.id, message: it.prompt,
+    assistant_text: 'sid=' + process.env.MMX_REFRESH_TOKEN + ' ek=' + att, status: 'completed',
+    completion_status: 'completed', terminal_reason: 'final_answer' }) + '\\n');
+}
+`);
+const ownDs = pathm.join(SANDBOX, 'data', 'data', 'datasets', 'gorsel-1');
+fsm.mkdirSync(pathm.join(ownDs, 'attachments'), { recursive: true });
+fsm.writeFileSync(pathm.join(ownDs, 'attachments', 'resim.png'), 'png');
+fsm.writeFileSync(pathm.join(ownDs, 'conversation_dataset.json'), JSON.stringify([
+  { id: 1, prompt: 'bu görsel ne', attachments: [{ name: 'resim.png', type: 'image/png' }] },
+]));
+const sel = await post('/api/config', { repo_root: loose });
+check('e2e.loose_script_recognized', sel.ok && sel.harness_kind === 'e2e-chat', sel.harness_kind);
+const runE2E = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'SID-9' });
+const stE2E = await waitIdle();
+const e2eOut = (stE2E.results || []).map((r) => r.agent_text).join('|');
+check('e2e.dataset_via_file_with_attachments', runE2E.ok && e2eOut === 'sid=SID-9 ek=true', e2eOut || runE2E.error);
+check('e2e.no_output_in_user_folders', !fsm.existsSync(pathm.join(SANDBOX, 'output')) && !fsm.existsSync(pathm.join(loose, 'output')));
+const arcE2E = await (await fetch(`${BASE}/api/archive`)).json();
+check('e2e.run_in_archive', (arcE2E.runs || []).some((r) => r.id.startsWith('gorsel-1/')));
+await post('/api/config', { repo_root: '' });
+
 // ---- temizlik ----
 await fetch(`${BASE}/api/dataset-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'sqtest-tmp' }) });
 

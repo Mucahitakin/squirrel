@@ -8,7 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import {
-  REPO_ROOT, HARNESS, HARNESS_KIND, OUTPUT_DIR, DATASETS_DIR, DATASET_FILES, DESKTOP_OUT, harnessOk,
+  REPO_ROOT, HARNESS, HARNESS_KIND, OUTPUT_DIR, DATASETS_DIR, DATASET_FILES, DESKTOP_OUT, DATA_DIR,
+  E2E_SCRIPT_REL, harnessOk, e2eRoot, readJson,
 } from './env.mjs';
 import { liteRecord } from './records.mjs';
 import { datasetItems } from './datasets.mjs';
@@ -73,7 +74,7 @@ function handleStdout(chunk) {
   const outMatch = state.stdoutBuffer.match(/# (?:cikti|output)=([^\s]+)/u);
   if (outMatch && !state.outDirAnnounced) {
     state.outDirAnnounced = true;
-    state.outDir = path.isAbsolute(outMatch[1]) ? outMatch[1] : path.join(REPO_ROOT || process.cwd(), outMatch[1]);
+    state.outDir = path.isAbsolute(outMatch[1]) ? outMatch[1] : path.join(state.outBase || REPO_ROOT || process.cwd(), outMatch[1]);
     state.tailOffset = 0;
     broadcast('run_meta', { out_dir: state.outDir, run_id: state.outDir.split(path.sep).slice(-2).join('/') });
   }
@@ -145,6 +146,51 @@ function splitArgs(raw) {
   return (String(raw || '').match(/"[^"]*"|'[^']*'|\S+/gu) || []).map((part) => part.replace(/^(['"])(.*)\1$/u, '$2'));
 }
 
+// e2e-chat sözleşmesi (run-chat-suite.mjs): betik dataset'i normalde kendi
+// yanındaki datasets/ klasöründe arar. Dataset başka yerdeyse (Squirrel'in
+// kendi verisi, projenin datasets/'i…) eklerin mutlak yollarıyla hazırlanmış
+// bir kopya '--file' ile verilir; betik düzensiz bir konumdaysa Squirrel'in
+// çalışma kökündeki kopyasından koşturulur.
+function prepareE2E(dataset) {
+  let script = HARNESS;
+  const root = e2eRoot(HARNESS);
+  if (!HARNESS.endsWith(E2E_SCRIPT_REL)) {
+    script = path.join(root, E2E_SCRIPT_REL);
+    fs.mkdirSync(path.dirname(script), { recursive: true });
+    fs.copyFileSync(HARNESS, script);
+  }
+  const own = path.join(DATASETS_DIR, dataset);
+  const native = path.join(path.dirname(script), 'datasets', dataset);
+  if (path.resolve(native) === path.resolve(own)) return { script, root, args: [] };
+
+  const source = datasetFileOf(dataset);
+  if (!source) throw new Error(`'${dataset}' dataset'inde mesaj dosyası yok (${DATASET_FILES.join(' / ')}).`);
+  const ext = path.extname(source);
+  const prepared = path.join(DATA_DIR, 'runtime', 'datasets', `${dataset}${ext}`); // dosya adı = set adı (çıktı klasörü adı)
+  fs.mkdirSync(path.dirname(prepared), { recursive: true });
+  if (ext === '.json') {
+    const raw = JSON.parse(fs.readFileSync(source, 'utf8'));
+    const items = Array.isArray(raw) ? raw : (Array.isArray(raw?.messages) ? raw.messages : []);
+    for (const item of items) {
+      if (!item || typeof item !== 'object' || !Array.isArray(item.attachments)) continue;
+      item.attachments = item.attachments.map((attachment) => {
+        const declared = String(attachment?.url || '').replace(/^file:\/\//u, '');
+        if (declared && fs.existsSync(declared)) return attachment;
+        const local = path.join(own, 'attachments', String(attachment?.name || ''));
+        return fs.existsSync(local) ? { ...attachment, url: `file://${local}` } : attachment;
+      });
+    }
+    fs.writeFileSync(prepared, JSON.stringify(Array.isArray(raw) ? items : { ...raw, messages: items }, null, 1));
+  } else {
+    fs.copyFileSync(source, prepared);
+  }
+  const cfg = readJson(path.join(own, 'dataset.json'), {}) || {};
+  const args = ['--file', prepared];
+  if (cfg.locale) args.push('--locale', String(cfg.locale));
+  if (cfg.timeout_seconds) args.push('--timeout', String(cfg.timeout_seconds));
+  return { script, root, args };
+}
+
 // Betiği uzantısına göre çalıştıracak komut. JS betikleri Squirrel'in kendi
 // Node çalışma ortamıyla koşar (hedef makinede Node kurulu olması gerekmez).
 function interpreterFor(script) {
@@ -173,8 +219,9 @@ export function startRun(options) {
   const dataset = String(options.dataset || '');
   if (!/^[A-Za-z0-9][A-Za-z0-9-_.]{0,80}$/u.test(dataset)) throw new Error('Geçerli bir dataset seç.');
 
-  const runner = interpreterFor(HARNESS);
-  const args = [...runner.args, '--dataset', dataset];
+  const e2e = e2eChat ? prepareE2E(dataset) : null;
+  const runner = interpreterFor(e2e ? e2e.script : HARNESS);
+  const args = [...runner.args, '--dataset', dataset, ...(e2e ? e2e.args : [])];
   if (options.from) args.push('--from', String(options.from));
   if (options.to) args.push('--to', String(options.to));
   if (e2eChat) {
@@ -193,13 +240,14 @@ export function startRun(options) {
   Object.assign(state, {
     running: true, dataset, startedAt: new Date().toISOString(),
     outDir: e2eChat ? null : outAbs, outDirAnnounced: false,
+    outBase: e2e ? e2e.root : (REPO_ROOT || path.dirname(HARNESS)),
     results: [], tailOffset: 0, stdoutBuffer: '', exportPath: null,
     stopFlag: false, lastLines: [],
     itemsByIndex: new Map(datasetItems(dataset).map((item) => [item.index, item])),
   });
 
   const child = spawn(runner.command, args, {
-    cwd: REPO_ROOT || path.dirname(HARNESS),
+    cwd: e2e ? e2e.root : (REPO_ROOT || path.dirname(HARNESS)),
     env: {
       ...process.env,
       ...runner.env,

@@ -71,6 +71,7 @@ const HARNESS_CANDIDATES = [
   'squirrel.harness.mjs', 'squirrel.harness.js', 'squirrel.harness.py', 'squirrel.harness.sh',
   path.join('.squirrel', 'harness.mjs'), path.join('.squirrel', 'harness.js'),
   path.join('.squirrel', 'harness.py'), path.join('.squirrel', 'harness.sh'),
+  path.basename(LEGACY_HARNESS), // tek başına kopyalanmış e2e-chat betiği
 ];
 const DATASET_CANDIDATES = [
   path.join('scripts', 'e2e-chat-harness', 'datasets'),
@@ -113,7 +114,17 @@ export function findProjectRoot(raw) {
 // import eden tüm modüller yeniden başlatma gerekmeden yeni yolu görür.
 export let REPO_ROOT = '';
 export let HARNESS = '';
-export let HARNESS_KIND = ''; // 'e2e-chat' (marketing_mix düzeni) | 'custom' | ''
+export let HARNESS_KIND = ''; // 'e2e-chat' (run-chat-suite.mjs sözleşmesi) | 'custom' | ''
+
+// e2e-chat betikleri çıktılarını kendi konumlarına göre (betik/../../output)
+// yazar. Betik olağan düzenindeyse (scripts/e2e-chat-harness/) o kök kullanılır;
+// başka bir yerde duruyorsa Squirrel onu kendi verisindeki bu çalışma köküne
+// kopyalayıp oradan koşturur — çıktılar kullanıcının klasörlerine dağılmaz.
+export const E2E_RUNTIME_ROOT = path.join(DATA_DIR, 'runtime', 'e2e-chat');
+export function e2eRoot(script = HARNESS) {
+  return script && script.endsWith(LEGACY_HARNESS) ? path.resolve(path.dirname(script), '..', '..') : E2E_RUNTIME_ROOT;
+}
+export const E2E_SCRIPT_REL = LEGACY_HARNESS;
 export let DATASETS_DIR = '';
 export let OUTPUT_DIR = '';
 
@@ -127,7 +138,7 @@ export function setProject(rawRoot, scriptOverride = '') {
   REPO_ROOT = rawRoot && isDir(path.resolve(expandHome(rawRoot))) ? path.resolve(expandHome(rawRoot)) : '';
   HARNESS = resolveScript(REPO_ROOT, scriptOverride)
     || (REPO_ROOT ? (HARNESS_CANDIDATES.map((rel) => path.join(REPO_ROOT, rel)).find(isFile) || '') : '');
-  HARNESS_KIND = !HARNESS ? '' : (HARNESS.endsWith(LEGACY_HARNESS) ? 'e2e-chat' : 'custom');
+  HARNESS_KIND = !HARNESS ? '' : (path.basename(HARNESS) === path.basename(LEGACY_HARNESS) ? 'e2e-chat' : 'custom');
   const repoDatasets = REPO_ROOT
     ? (DATASET_CANDIDATES.map((rel) => path.join(REPO_ROOT, rel)).find(isDir)
       || (holdsDatasets(REPO_ROOT) ? REPO_ROOT : ''))
@@ -137,7 +148,8 @@ export function setProject(rawRoot, scriptOverride = '') {
   // da orada durur. Diğer tüm projelerin koşuları Squirrel'in kendi verisinde
   // tutulur — kullanıcının reposuna yazılmaz.
   const legacyOut = REPO_ROOT ? path.join(REPO_ROOT, 'output', 'e2e-chat') : '';
-  OUTPUT_DIR = legacyOut && (HARNESS_KIND === 'e2e-chat' || isDir(legacyOut)) ? legacyOut : path.join(DATA_DIR, 'output');
+  if (HARNESS_KIND === 'e2e-chat') OUTPUT_DIR = path.join(e2eRoot(HARNESS), 'output', 'e2e-chat');
+  else OUTPUT_DIR = legacyOut && isDir(legacyOut) ? legacyOut : path.join(DATA_DIR, 'output');
   return describeProject();
 }
 
