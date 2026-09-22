@@ -64,8 +64,8 @@ const pillHtml=(s,l)=>`<span class="pill p-${s}"><span class="d"></span>${esc(l)
 async function loadConfig(){
   const cfg=await (await fetch('/api/config')).json();
   datasets=cfg.datasets||[];
-  $('repoStat').textContent=cfg.repo_ok?cfg.repo_root:'⚠ repo bulunamadı';
-  $('cfgRepo').value=cfg.repo_root;$('cfgOut').textContent=cfg.desktop_out;
+  renderRepoState(cfg);
+  $('cfgOut').textContent=cfg.desktop_out;
   if(cfg.api_key){$('cfgKey').value=cfg.api_key;$('cfgIngest').value=cfg.ingest_url||'';}
   $('cfgLive').checked=cfg.live_ingest!==false;
   $('dataset').innerHTML=datasets.map(d=>`<option value="${d.name}">${d.name} · ${d.count} madde</option>`).join('');
@@ -73,6 +73,44 @@ async function loadConfig(){
   if(pref)$('dataset').value=pref;
   updDesc();
 }
+/* ---------- repo (harness) klasörü ----------
+   Masaüstünde native klasör seçici (preload köprüsü) kullanılır; tarayıcı
+   kipinde yol elle yazılır. Kayıt anında uygulanır, yeniden başlatma yok. */
+const DESKTOP=window.squirrelDesktop||null;
+function renderRepoState(cfg){
+  const ok=Boolean(cfg.repo_ok), root=cfg.repo_root||'';
+  $('repoStat').textContent=ok?root:(root?'⚠ harness bulunamadı':'bağımsız kip');
+  $('cfgRepo').value=root;
+  const box=$('harnessRepo');
+  box.classList.toggle('ok',ok);box.classList.toggle('bad',!ok);
+  $('harnessRepoState').textContent=ok?'Repo bağlı':'Repo klasörü seçilmedi';
+  $('harnessRepoPath').textContent=ok?root:(DESKTOP?'Harness için repo klasörünü seç':'Ayarlar > Repo klasörü\'ne yolu yaz');
+  $('harnessRepoPath').title=root;
+}
+async function saveRepo(value,noteEl){
+  const res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({repo_root:value})});
+  const data=await res.json();
+  if(!data.ok){
+    if(noteEl)noteEl.textContent='';
+    await sqAlert('Klasör kullanılamadı',esc(data.error||'bilinmeyen hata'));
+    return false;
+  }
+  await loadConfig();
+  if(noteEl)noteEl.textContent=value?'Bağlandı ✓ — dataset\'ler yenilendi.':'Bağlantı kaldırıldı — bağımsız kip.';
+  return true;
+}
+async function pickRepo(noteEl){
+  if(!DESKTOP)return;
+  const dir=await DESKTOP.pickFolder('Harness içeren repo klasörünü seç (ör. marketing_mix)');
+  if(dir)await saveRepo(dir,noteEl);
+}
+if(DESKTOP){$('cfgPick').style.display='';}
+else{$('harnessPick').style.display='none';}
+$('cfgPick').onclick=()=>pickRepo($('cfgNote'));
+$('harnessPick').onclick=()=>pickRepo(null);
+$('cfgClear').onclick=()=>saveRepo('',$('cfgNote'));
+
 function updDesc(){
   const d=datasets.find(x=>x.name===$('dataset').value);
   $('datasetDesc').textContent=d?d.description:'';
@@ -615,12 +653,7 @@ $('btnStart').onclick=async()=>{
   if(!data.ok)sqAlert('Başlatılamadı',esc(data.error||'bilinmeyen hata'));
 };
 $('btnStop').onclick=()=>fetch('/api/stop',{method:'POST'});
-$('cfgSave').onclick=async()=>{
-  const res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({repo_root:$('cfgRepo').value.trim()})});
-  const data=await res.json();
-  $('cfgNote').textContent=data.ok?'Kaydedildi — uygulamayı yeniden başlat.':'Kaydedilemedi: '+(data.error||'');
-};
+$('cfgSave').onclick=()=>saveRepo($('cfgRepo').value.trim(),$('cfgNote'));
 
 /* ---------- DATASET'LER ---------- */
 let dsCurrent=null;

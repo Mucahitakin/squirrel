@@ -58,20 +58,56 @@ if (!bootConfig.api_key) {
 }
 export const API_KEY = bootConfig.api_key;
 
-export const REPO_ROOT = bootConfig.repo_root
-  ? String(bootConfig.repo_root).replace('~', os.homedir())
-  : path.join(os.homedir(), 'Desktop', 'marketing_mix');
-export const HARNESS = path.join(REPO_ROOT, 'scripts', 'e2e-chat-harness', 'run-chat-suite.mjs');
-
-// Squirrel tek bir projeye bağlı değildir: repo (harness) yapılandırılmışsa
+// Squirrel tek bir projeye bağlı değildir: repo (harness) bağlıysa
 // dataset/çıktı oradan okunur-yazılır; yoksa uygulamanın kendi data/ klasörü
 // kullanılır ve uygulama tamamen bağımsız çalışır.
 export const DATA_DIR = path.join(DATA_ROOT, 'data');
-const repoDatasets = path.join(REPO_ROOT, 'scripts', 'e2e-chat-harness', 'datasets');
-export const DATASETS_DIR = fs.existsSync(repoDatasets) ? repoDatasets : path.join(DATA_DIR, 'datasets');
-export const OUTPUT_DIR = fs.existsSync(REPO_ROOT)
-  ? path.join(REPO_ROOT, 'output', 'e2e-chat')
-  : path.join(DATA_DIR, 'output');
+const HARNESS_REL = path.join('scripts', 'e2e-chat-harness', 'run-chat-suite.mjs');
+
+function expandHome(raw) {
+  const value = String(raw || '').trim();
+  return value.startsWith('~') ? path.join(os.homedir(), value.slice(1)) : value;
+}
+
+// Seçilen klasörden yukarı doğru harness içeren repo kökünü arar; kullanıcı
+// yanlışlıkla scripts/ ya da e2e-chat-harness/ klasörünü seçerse düzeltir.
+export function findRepoRoot(raw) {
+  let dir = path.resolve(expandHome(raw));
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (fs.existsSync(path.join(dir, HARNESS_REL))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+// Repo yolları canlı (ESM live binding): setRepoRoot çağrılınca bu değerleri
+// import eden tüm modüller yeniden başlatma gerekmeden yeni yolu görür.
+export let REPO_ROOT = '';
+export let HARNESS = '';
+export let DATASETS_DIR = '';
+export let OUTPUT_DIR = '';
+
+export function setRepoRoot(raw) {
+  REPO_ROOT = raw ? path.resolve(expandHome(raw)) : '';
+  HARNESS = REPO_ROOT ? path.join(REPO_ROOT, HARNESS_REL) : '';
+  const repoDatasets = REPO_ROOT ? path.join(REPO_ROOT, 'scripts', 'e2e-chat-harness', 'datasets') : '';
+  DATASETS_DIR = repoDatasets && fs.existsSync(repoDatasets) ? repoDatasets : path.join(DATA_DIR, 'datasets');
+  OUTPUT_DIR = REPO_ROOT && fs.existsSync(REPO_ROOT)
+    ? path.join(REPO_ROOT, 'output', 'e2e-chat')
+    : path.join(DATA_DIR, 'output');
+  return { repo_root: REPO_ROOT, repo_ok: Boolean(HARNESS) && fs.existsSync(HARNESS) };
+}
+
+export function repoOk() { return Boolean(HARNESS) && fs.existsSync(HARNESS); }
+
+// Açılış: yapılandırılmış yol; hiç ayarlanmadıysa eski varsayılan konum
+// (yalnızca gerçekten varsa — yoksa bağımsız kipte açılır).
+{
+  const legacy = path.join(os.homedir(), 'Desktop', 'marketing_mix');
+  setRepoRoot(bootConfig.repo_root !== undefined ? bootConfig.repo_root : (fs.existsSync(legacy) ? legacy : ''));
+}
 
 // ---------- canlı yapılandırma (mtime önbellekli) ----------
 // live_ingest gibi anında geçerli ayarlar buradan okunur; dosya değişmediyse

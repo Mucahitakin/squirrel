@@ -123,6 +123,10 @@
         <div><label>Bitiş</label><input id="to" type="number" min="1" placeholder="son"></div>
       </div>
       <div id="harnessFields" style="display:none;flex-direction:column;gap:11px">
+        <div id="harnessRepo" class="repoBox">
+          <div class="repoBoxTxt"><b id="harnessRepoState">Repo</b><span id="harnessRepoPath"></span></div>
+          <button class="btn sm" id="harnessPick">Klasör seç…</button>
+        </div>
         <label class="switch"><input type="checkbox" id="multiThread"> Her konu ayrı thread</label>
         <div><label>Devam thread (ops.)</label><input id="thread" placeholder="1787…"></div>
         <div><label>Oturum çerezi (_sid)</label><input id="token" type="password" placeholder="_sid değeri"></div>
@@ -343,11 +347,15 @@
   <div class="view" id="vSettings">
     <div class="inner">
       <div class="settingCard">
-        <h3>Repo konumu</h3>
-        <p>marketing_mix reposunun tam yolu. Harness ve dataset'ler buradan okunur; Squirrel repoya yazmaz.</p>
-        <input id="cfgRepo" placeholder="~/Desktop/marketing_mix">
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <h3>Repo klasörü (Harness)</h3>
+        <p>Harness içeren proje klasörü (ör. marketing_mix). Seçilirse Harness motoru ve o repodaki dataset'ler kullanılır. <b>İsteğe bağlı:</b> seçmezsen Squirrel kendi dataset'leriyle bağımsız çalışır; Chat API motoru ve SDK her durumda çalışır.</p>
+        <div style="display:flex;gap:8px">
+          <input id="cfgRepo" placeholder="klasör seçilmedi — bağımsız kip">
+          <button class="btn" id="cfgPick" style="display:none">Klasör seç…</button>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button class="btnPrimary" style="width:auto;padding:7px 15px" id="cfgSave">Kaydet</button>
+          <button class="btn ghost" id="cfgClear">Bağlantıyı kaldır</button>
           <span id="cfgNote" style="font-size:11px;color:var(--muted)"></span>
         </div>
       </div>

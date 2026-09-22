@@ -103,7 +103,7 @@ export function startRun(options) {
   if (!String(options.refreshToken || options.authToken || '').trim()) {
     throw new Error("Oturum çerezi (_sid) boş — tarayıcıda localhost:8080'e girişten sonra DevTools → Application → Cookies → _sid değerini yapıştır.");
   }
-  if (!fs.existsSync(HARNESS)) throw new Error(`Harness bulunamadı: ${HARNESS} — config.json içindeki repo_root'u kontrol et.`);
+  if (!HARNESS || !fs.existsSync(HARNESS)) throw new Error('Harness bağlı değil — Ayarlar > Repo klasörü bölümünden (ya da bu formdaki "Klasör seç" ile) harness içeren repo klasörünü seç.');
   const args = [HARNESS, '--dataset', options.dataset];
   if (options.from) args.push('--from', String(options.from));
   if (options.to) args.push('--to', String(options.to));

@@ -292,3 +292,14 @@
 .btn.danger:hover{background:var(--errbg)}
 .btn.sm{padding:4px 10px;font-size:11px;border-radius:7px}
 .btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- repo (harness) bağlantı kutusu ---------- */
+.repoBox{display:flex;align-items:center;gap:10px;border:1px solid var(--line2);border-radius:10px;
+  padding:9px 11px;background:var(--card)}
+.repoBox.ok{border-color:rgba(47,191,130,.35);background:var(--okbg)}
+.repoBox.bad{border-color:rgba(232,161,60,.4);background:var(--warnbg)}
+.repoBoxTxt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.repoBoxTxt b{font-size:11.5px}
+.repoBox.ok .repoBoxTxt b{color:var(--ok)}
+.repoBox.bad .repoBoxTxt b{color:var(--warn)}
+.repoBoxTxt span{font:10px var(--mono);color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

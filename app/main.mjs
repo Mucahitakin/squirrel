@@ -1,7 +1,7 @@
 // Squirrel — Electron ana süreç (sağlamlaştırılmış).
 // Her hata görünür bir iletişim kutusuna ve squirrel.log dosyasına yazılır;
 // port doluysa 4590-4599 arasında boş port bulunur ya da açık Squirrel'e bağlanılır.
-import { app, BrowserWindow, shell, Menu, dialog, screen, nativeImage } from 'electron';
+import { app, BrowserWindow, shell, Menu, dialog, screen, nativeImage, ipcMain } from 'electron';
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -67,7 +67,10 @@ function createWindow(port) {
     backgroundColor: '#0a0c10',
     title: 'Squirrel',
     show: false,
-    webPreferences: { contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      contextIsolation: true, nodeIntegration: false, sandbox: true,
+      preload: path.join(APP_DIR, 'preload.cjs'),
+    },
   });
   win.once('ready-to-show', () => win.show());
   win.loadURL(`http://localhost:${port}`);
@@ -116,6 +119,17 @@ async function setupAutoUpdate(win) {
   try { await autoUpdater.checkForUpdates(); } catch { /* ağ yok / release yok */ }
   setInterval(() => { autoUpdater.checkForUpdates().catch(() => {}); }, 4 * 60 * 60 * 1000);
 }
+
+// Klasör seçme (Ayarlar > Repo klasörü ve Canlı Test > Harness).
+ipcMain.handle('squirrel:pick-folder', async (event, title) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
+    title: title || 'Klasör seç',
+    buttonLabel: 'Seç',
+    properties: ['openDirectory'],
+  });
+  return result.canceled || !result.filePaths.length ? null : result.filePaths[0];
+});
 
 app.whenReady().then(async () => {
   try {

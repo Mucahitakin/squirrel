@@ -19,7 +19,7 @@
  */
 import http from 'node:http';
 import fs from 'node:fs';
-import { PORT, HOST, REPO_ROOT, HARNESS } from './lib/env.mjs';
+import { PORT, HOST, REPO_ROOT, repoOk } from './lib/env.mjs';
 import { handleRequest } from './lib/routes.mjs';
 
 const server = http.createServer(handleRequest);
@@ -29,7 +29,7 @@ const server = http.createServer(handleRequest);
 //  - Sunucu/headless: `node app/server.mjs` (SQUIRREL_HOST/PORT/DATA_DIR ile).
 server.listen(PORT, HOST, () => {
   console.log(`Squirrel sunucusu hazır: http://${HOST}:${PORT}`);
-  console.log(`Repo: ${REPO_ROOT} (${fs.existsSync(HARNESS) ? 'ok' : 'harness yok — bağımsız kip'})`);
+  console.log(`Repo: ${REPO_ROOT || '(bağlı değil)'} (${repoOk() ? 'ok' : 'harness yok — bağımsız kip'})`);
   if (HOST !== '127.0.0.1') {
     console.log('UYARI: sunucu dış ağa açık ve arayüzde oturum koruması yok — erişimi VPN ya da reverse proxy (TLS + auth) ile sınırla.');
   }

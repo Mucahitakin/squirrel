@@ -5,8 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  PORT, UI_DIR, ASSETS_DIR, CONFIG_FILE, DESKTOP_OUT, REPO_ROOT, HARNESS,
-  OUTPUT_DIR, API_KEY, readJson, liveConfig,
+  PORT, UI_DIR, ASSETS_DIR, CONFIG_FILE, DESKTOP_OUT, REPO_ROOT,
+  OUTPUT_DIR, API_KEY, readJson, liveConfig, findRepoRoot, setRepoRoot, repoOk,
 } from './env.mjs';
 import {
   loadProjects, createProject, deleteProject, rotateProjectKey, projectByKey, projectOfRun,
@@ -160,15 +160,31 @@ async function route(req, res) {
     const body = await readBody(req);
     try {
       const next = { ...readJson(CONFIG_FILE, {}) };
-      if (body.repo_root !== undefined) next.repo_root = String(body.repo_root || '').trim();
+      let repo = null;
+      if (body.repo_root !== undefined) {
+        const wanted = String(body.repo_root || '').trim();
+        // Boş = repo bağlantısını kaldır (bağımsız kip). Dolu = harness içeren
+        // klasör olmalı; alt klasör seçildiyse repo kökü kendiliğinden bulunur.
+        const root = wanted ? findRepoRoot(wanted) : '';
+        if (root === null) {
+          return json(res, 400, {
+            ok: false,
+            error: `Bu klasörde harness bulunamadı (scripts/e2e-chat-harness/run-chat-suite.mjs). Repo'nun ana klasörünü seç: ${wanted}`,
+          });
+        }
+        if (state.running) return json(res, 409, { ok: false, error: 'Koşu sürerken repo değiştirilemez.' });
+        next.repo_root = root;
+        repo = setRepoRoot(root); // yeniden başlatma gerekmez
+        invalidateArchiveList();
+      }
       if (body.live_ingest !== undefined) next.live_ingest = Boolean(body.live_ingest);
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2));
-      return json(res, 200, { ok: true, needs_restart: true });
+      return json(res, 200, { ok: true, needs_restart: false, ...(repo || {}) });
     } catch (error) { return json(res, 400, { ok: false, error: error.message }); }
   }
   if (routePath === '/api/config') {
     return json(res, 200, {
-      repo_root: REPO_ROOT, repo_ok: fs.existsSync(HARNESS),
+      repo_root: REPO_ROOT, repo_ok: repoOk(),
       desktop_out: DESKTOP_OUT, datasets: listDatasets(),
       api_key: API_KEY, ingest_url: `http://localhost:${PORT}/api/ingest`,
       live_ingest: liveConfig().live_ingest !== false,
