@@ -2,8 +2,9 @@
 /**
  * Squirrel — LangSmith tarzı yerel test/izleme uygulaması (sunucu girişi).
  *
- * marketing_mix reposunun DIŞINDA yaşar; repoya asla yazmaz, yalnızca okur ve
- * mevcut harness'ı (run-chat-suite.mjs) child process olarak çalıştırır.
+ * Seçilen projenin DIŞINDA yaşar; projeye yazmaz (yalnız e2e-chat düzenindeki
+ * betikler kendi çıktılarını kendi klasörlerine yazar), yalnızca okur ve
+ * projenin kendi test betiğini (harness) child process olarak çalıştırır.
  *
  * Kod düzeni (app/lib):
  *   env.mjs      — yollar, .env, gizli anahtar, yapılandırma önbelleği
@@ -19,7 +20,7 @@
  */
 import http from 'node:http';
 import fs from 'node:fs';
-import { PORT, HOST, REPO_ROOT, repoOk } from './lib/env.mjs';
+import { PORT, HOST, REPO_ROOT, harnessOk } from './lib/env.mjs';
 import { handleRequest } from './lib/routes.mjs';
 
 const server = http.createServer(handleRequest);
@@ -29,7 +30,7 @@ const server = http.createServer(handleRequest);
 //  - Sunucu/headless: `node app/server.mjs` (SQUIRREL_HOST/PORT/DATA_DIR ile).
 server.listen(PORT, HOST, () => {
   console.log(`Squirrel sunucusu hazır: http://${HOST}:${PORT}`);
-  console.log(`Repo: ${REPO_ROOT || '(bağlı değil)'} (${repoOk() ? 'ok' : 'harness yok — bağımsız kip'})`);
+  console.log(`Proje: ${REPO_ROOT || '(seçilmedi — bağımsız kip)'}${harnessOk() ? ' · test betiği var' : ''}`);
   if (HOST !== '127.0.0.1') {
     console.log('UYARI: sunucu dış ağa açık ve arayüzde oturum koruması yok — erişimi VPN ya da reverse proxy (TLS + auth) ile sınırla.');
   }

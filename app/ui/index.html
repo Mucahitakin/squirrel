@@ -115,7 +115,7 @@
     <aside id="liveSide">
       <div><label>Motor</label><select id="engine">
         <option value="generic">Chat API (herhangi bir sistem)</option>
-        <option value="harness">Harness (repo betiği)</option>
+        <option value="harness">Test betiği (harness)</option>
       </select></div>
       <div><label>Dataset</label><select id="dataset"></select><div class="desc" id="datasetDesc"></div></div>
       <div class="row2">
@@ -124,13 +124,25 @@
       </div>
       <div id="harnessFields" style="display:none;flex-direction:column;gap:11px">
         <div id="harnessRepo" class="repoBox">
-          <div class="repoBoxTxt"><b id="harnessRepoState">Repo</b><span id="harnessRepoPath"></span></div>
+          <div class="repoBoxTxt"><b id="harnessRepoState">Proje</b><span id="harnessRepoPath"></span></div>
           <button class="btn sm" id="harnessPick">Klasör seç…</button>
         </div>
-        <label class="switch"><input type="checkbox" id="multiThread"> Her konu ayrı thread</label>
-        <div><label>Devam thread (ops.)</label><input id="thread" placeholder="1787…"></div>
-        <div><label>Oturum çerezi (_sid)</label><input id="token" type="password" placeholder="_sid değeri"></div>
-        <div><label>API adresi</label><input id="base" value="http://localhost:3009/api"></div>
+        <div id="harnessScript" class="repoBox">
+          <div class="repoBoxTxt"><b id="harnessScriptState">Test betiği</b><span id="harnessScriptPath"></span></div>
+          <button class="btn sm" id="harnessScriptPick">Betik seç…</button>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn sm ghost" id="pkgImport" style="flex:1">Paket içe aktar…</button>
+          <button class="btn sm ghost" id="pkgExport" style="flex:1">Projeyi paketle</button>
+        </div>
+        <div id="e2eFields" style="display:none;flex-direction:column;gap:11px">
+          <label class="switch"><input type="checkbox" id="multiThread"> Her konu ayrı thread</label>
+          <div><label>Devam thread (ops.)</label><input id="thread" placeholder="thread id"></div>
+          <div><label>Oturum çerezi (_sid)</label><input id="token" type="password" placeholder="_sid değeri"></div>
+          <div><label>API adresi</label><input id="base" value="http://localhost:3009/api"></div>
+        </div>
+        <div><label>Ortam değişkenleri (ops., satır başına KEY=değer)</label><textarea id="hEnv" rows="2" placeholder="API_URL=https://…&#10;API_KEY=…" style="width:100%;background:var(--card);border:1px solid var(--line2);color:var(--text);border-radius:8px;padding:6px 9px;font:11px var(--mono);resize:vertical"></textarea></div>
+        <div><label>Ek argümanlar (ops.)</label><input id="hArgs" placeholder="--timeout 600"></div>
       </div>
       <div id="genericFields" style="display:flex;flex-direction:column;gap:11px">
         <div><label>Chat endpoint (POST)</label><input id="genUrl" placeholder="https://api.sistemim.com/chat"></div>
@@ -347,10 +359,10 @@
   <div class="view" id="vSettings">
     <div class="inner">
       <div class="settingCard">
-        <h3>Repo klasörü (Harness)</h3>
-        <p>Harness içeren proje klasörü (ör. marketing_mix). Seçilirse Harness motoru ve o repodaki dataset'ler kullanılır. <b>İsteğe bağlı:</b> seçmezsen Squirrel kendi dataset'leriyle bağımsız çalışır; Chat API motoru ve SDK her durumda çalışır.</p>
+        <h3>Proje klasörü</h3>
+        <p>Test edeceğin herhangi bir projenin klasörü. Squirrel orada dataset'leri (<code>datasets/</code>) ve projenin kendi test betiğini (<code>squirrel.harness.*</code> ya da seçtiğin betik) bulur. <b>İsteğe bağlı:</b> seçmezsen Squirrel kendi dataset'leriyle bağımsız çalışır; Chat API motoru ve SDK her durumda çalışır.</p>
         <div style="display:flex;gap:8px">
-          <input id="cfgRepo" placeholder="klasör seçilmedi — bağımsız kip">
+          <input id="cfgRepo" placeholder="proje seçilmedi — bağımsız kip">
           <button class="btn" id="cfgPick" style="display:none">Klasör seç…</button>
         </div>
         <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">

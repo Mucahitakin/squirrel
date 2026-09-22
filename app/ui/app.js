@@ -69,46 +69,85 @@ async function loadConfig(){
   if(cfg.api_key){$('cfgKey').value=cfg.api_key;$('cfgIngest').value=cfg.ingest_url||'';}
   $('cfgLive').checked=cfg.live_ingest!==false;
   $('dataset').innerHTML=datasets.map(d=>`<option value="${d.name}">${d.name} · ${d.count} madde</option>`).join('');
-  const pref=datasets.find(d=>d.name==='agent-60')?'agent-60':(datasets[0]||{}).name;
+  let last='';try{last=localStorage.getItem('sq_dataset')||'';}catch{}
+  const pref=datasets.find(d=>d.name===last)?last:(datasets[0]||{}).name;
   if(pref)$('dataset').value=pref;
   updDesc();
 }
-/* ---------- repo (harness) klasörü ----------
-   Masaüstünde native klasör seçici (preload köprüsü) kullanılır; tarayıcı
+/* ---------- proje klasörü + test betiği ----------
+   Herhangi bir proje seçilebilir; betik otomatik bulunur ya da seçilir.
+   Masaüstünde native pencereler (preload köprüsü) kullanılır; tarayıcı
    kipinde yol elle yazılır. Kayıt anında uygulanır, yeniden başlatma yok. */
 const DESKTOP=window.squirrelDesktop||null;
+let projectCfg={};
+const shortPath=(p)=>String(p||'').replace(/^\/Users\/[^/]+/,'~');
 function renderRepoState(cfg){
-  const ok=Boolean(cfg.repo_ok), root=cfg.repo_root||'';
-  $('repoStat').textContent=ok?root:(root?'⚠ harness bulunamadı':'bağımsız kip');
+  projectCfg=cfg;
+  const root=cfg.repo_root||'', script=cfg.harness||'';
+  $('repoStat').textContent=root?shortPath(root):'bağımsız kip';
   $('cfgRepo').value=root;
   const box=$('harnessRepo');
-  box.classList.toggle('ok',ok);box.classList.toggle('bad',!ok);
-  $('harnessRepoState').textContent=ok?'Repo bağlı':'Repo klasörü seçilmedi';
-  $('harnessRepoPath').textContent=ok?root:(DESKTOP?'Harness için repo klasörünü seç':'Ayarlar > Repo klasörü\'ne yolu yaz');
+  box.classList.toggle('ok',Boolean(root));box.classList.toggle('bad',!root);
+  $('harnessRepoState').textContent=root?'Proje bağlı':'Proje seçilmedi';
+  $('harnessRepoPath').textContent=root?shortPath(root)+(cfg.datasets_in_project?' · dataset\'ler projeden':' · Squirrel dataset\'leri'):(DESKTOP?'Test edeceğin projenin klasörünü seç':'Ayarlar > Proje klasörü\'ne yolu yaz');
   $('harnessRepoPath').title=root;
+  const sbox=$('harnessScript');
+  sbox.classList.toggle('ok',Boolean(script));sbox.classList.toggle('bad',!script);
+  $('harnessScriptState').textContent=script?'Test betiği bulundu':'Test betiği yok';
+  $('harnessScriptPath').textContent=script?shortPath(script):(root?'Betiği seç (.mjs/.js/.py/.sh)':'Önce proje seç ya da paket içe aktar');
+  $('harnessScriptPath').title=script;
+  $('e2eFields').style.display=cfg.harness_kind==='e2e-chat'?'flex':'none';
+  $('pkgExport').disabled=!script;
 }
-async function saveRepo(value,noteEl){
-  const res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({repo_root:value})});
+async function postConfig(body,noteEl,okText){
+  const res=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const data=await res.json();
-  if(!data.ok){
-    if(noteEl)noteEl.textContent='';
-    await sqAlert('Klasör kullanılamadı',esc(data.error||'bilinmeyen hata'));
-    return false;
-  }
+  if(!data.ok){if(noteEl)noteEl.textContent='';await sqAlert('Kullanılamadı',esc(data.error||'bilinmeyen hata'));return false;}
   await loadConfig();
-  if(noteEl)noteEl.textContent=value?'Bağlandı ✓ — dataset\'ler yenilendi.':'Bağlantı kaldırıldı — bağımsız kip.';
+  if(noteEl)noteEl.textContent=okText||'Kaydedildi ✓';
   return true;
 }
+const saveRepo=(value,noteEl)=>postConfig({repo_root:value},noteEl,value?'Proje bağlandı ✓ — dataset\'ler yenilendi.':'Bağlantı kaldırıldı — bağımsız kip.');
 async function pickRepo(noteEl){
   if(!DESKTOP)return;
-  const dir=await DESKTOP.pickFolder('Harness içeren repo klasörünü seç (ör. marketing_mix)');
+  const dir=await DESKTOP.pickFolder('Test edeceğin projenin klasörünü seç');
   if(dir)await saveRepo(dir,noteEl);
 }
+async function pickScript(){
+  if(!DESKTOP)return;
+  const file=await DESKTOP.pickFile('Projenin test betiğini seç','script');
+  if(file)await postConfig({harness_script:file},null);
+}
+async function importPackage(){
+  if(!DESKTOP)return;
+  const file=await DESKTOP.pickFile('Squirrel proje paketini seç (.zip)','package');
+  if(!file)return;
+  const res=await fetch('/api/project-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({file})});
+  const data=await res.json();
+  if(!data.ok){await sqAlert('Paket açılamadı',esc(data.error||''));return;}
+  await loadConfig();
+  sqAlert('Paket içe aktarıldı',`Proje Squirrel'e kopyalandı ve seçildi:<br><code>${esc(shortPath(data.repo_root))}</code><br><br>Orijinal repo olmadan bu makinede çalışır.`);
+}
+async function exportPackage(){
+  if(!DESKTOP||!projectCfg.harness)return;
+  const name=(String(projectCfg.repo_root).split(/[\\/]/).pop()||'proje').toLowerCase().replace(/[^a-z0-9-_]+/g,'-');
+  const dest=await DESKTOP.saveFile('Proje paketini kaydet',`${name}.squirrel.zip`);
+  if(!dest)return;
+  $('pkgExport').disabled=true;$('pkgExport').textContent='Paketleniyor…';
+  try{
+    const res=await fetch('/api/project-export',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dest})});
+    const data=await res.json();
+    if(!data.ok){await sqAlert('Paketlenemedi',esc(data.error||''));return;}
+    sqAlert('Paket hazır',`Test betiği ve dataset'ler paketlendi (${(data.size/1048576).toFixed(1)} MB):<br><code>${esc(shortPath(data.file))}</code><br><br>Bu dosyayı diğer bilgisayara gönder, orada Squirrel'de <b>Paket içe aktar…</b> ile aç.`);
+  }finally{$('pkgExport').textContent='Projeyi paketle';$('pkgExport').disabled=!projectCfg.harness;}
+}
 if(DESKTOP){$('cfgPick').style.display='';}
-else{$('harnessPick').style.display='none';}
+else{['harnessPick','harnessScriptPick','pkgImport','pkgExport'].forEach(id=>{$(id).style.display='none';});}
 $('cfgPick').onclick=()=>pickRepo($('cfgNote'));
 $('harnessPick').onclick=()=>pickRepo(null);
+$('harnessScriptPick').onclick=pickScript;
+$('pkgImport').onclick=importPackage;
+$('pkgExport').onclick=exportPackage;
 $('cfgClear').onclick=()=>saveRepo('',$('cfgNote'));
 
 function updDesc(){
@@ -116,7 +155,8 @@ function updDesc(){
   $('datasetDesc').textContent=d?d.description:'';
   $('stTotal').textContent=d?d.count:'–';
 }
-$('dataset').addEventListener('change',updDesc);
+$('dataset').addEventListener('change',()=>{updDesc();try{localStorage.setItem('sq_dataset',$('dataset').value);}catch{}});
+try{$('hArgs').value=localStorage.getItem('sq_hargs')||'';}catch{}
 
 /* ---------- nav ---------- */
 const navs={proj:['nvProj','vProj','Projeler'],live:['nvLive','vLive','Canlı Test'],runs:['nvRuns','vRuns','Koşular'],thr:['nvThr','vThr','Threads'],comp:['nvComp','vComp','Karşılaştır'],mon:['nvMon','vMon','Monitoring'],data:['nvData','vData','Dataset\'ler'],set:['nvSet','vSettings','Ayarlar']};
@@ -642,12 +682,15 @@ $('btnStart').onclick=async()=>{
     if(!data.ok)sqAlert('Başlatılamadı',esc(data.error||'bilinmeyen hata'));
     return;
   }
+  const e2e=projectCfg.harness_kind==='e2e-chat';
   const token=$('token').value.trim();
-  try{localStorage.setItem('mmx_sid',token);}catch{}
+  if(e2e){try{localStorage.setItem('mmx_sid',token);}catch{}}
+  try{localStorage.setItem('sq_hargs',$('hArgs').value);}catch{}
   const res=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
     dataset:$('dataset').value,from:Number($('from').value)||null,to:Number($('to').value)||null,
-    multi_thread:$('multiThread').checked,thread:$('thread').value.trim()||null,
-    base:$('base').value.trim()||null,refresh_token:token,
+    env:$('hEnv').value,args:$('hArgs').value.trim(),
+    ...(e2e?{multi_thread:$('multiThread').checked,thread:$('thread').value.trim()||null,
+      base:$('base').value.trim()||null,refresh_token:token}:{}),
   })});
   const data=await res.json();
   if(!data.ok)sqAlert('Başlatılamadı',esc(data.error||'bilinmeyen hata'));

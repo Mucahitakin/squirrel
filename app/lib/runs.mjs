@@ -1,12 +1,15 @@
 // Squirrel — canlı koşu motorları.
-// 1) Harness: repo'daki run-chat-suite.mjs child process olarak koşar,
-//    stdout + results.jsonl canlı izlenir.
+// 1) Harness: seçilen projenin kendi test betiği child process olarak koşar
+//    (Node/Python/bash); stdout + results.jsonl canlı izlenir. Sözleşme
+//    README'de: betik SQUIRREL_OUT_DIR/results.jsonl'e satır satır yazar.
 // 2) Generic: herhangi bir HTTP chat endpoint'i dataset ile beslenir.
 // İkisi de aynı results.jsonl şemasına yazar ve aynı SSE olaylarını yayınlar.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { REPO_ROOT, HARNESS, OUTPUT_DIR, DESKTOP_OUT } from './env.mjs';
+import {
+  REPO_ROOT, HARNESS, HARNESS_KIND, OUTPUT_DIR, DATASETS_DIR, DATASET_FILES, DESKTOP_OUT, harnessOk,
+} from './env.mjs';
 import { liteRecord } from './records.mjs';
 import { datasetItems } from './datasets.mjs';
 import { broadcast } from './sse.mjs';
@@ -18,9 +21,29 @@ export const state = {
   stopFlag: false, lastLines: [],
 };
 
+// Özel betikler sade alan adlarıyla yazabilir (input/output/status); Squirrel
+// şemasına eksik alanlar tamamlanır. e2e-chat düzeninin kayıtları zaten tamdır.
+function normalizeRecord(record, fallbackIndex) {
+  const status = record.completion_status || record.status || 'completed';
+  return {
+    ...record,
+    index: record.index ?? fallbackIndex,
+    message: record.message ?? String(record.input ?? record.prompt ?? ''),
+    assistant_text: record.assistant_text ?? String(record.output ?? record.answer ?? ''),
+    status: record.status ?? status,
+    completion_status: status,
+    terminal_reason: record.terminal_reason ?? (status === 'completed' ? 'final_answer' : null),
+    tools: record.tools ?? [],
+    errors: record.errors ?? (record.error ? [{ type: 'error', payload: { code: 'SCRIPT_ERROR', message: String(record.error) } }] : []),
+    raw_events: record.raw_events ?? record.events ?? [],
+    logical_thread: record.logical_thread ?? record.thread ?? null,
+    thread_id: record.thread_id ?? record.thread ?? null,
+  };
+}
+
 function tailResults() {
   if (!state.outDir) return;
-  const file = path.join(REPO_ROOT, state.outDir, 'results.jsonl');
+  const file = path.join(state.outDir, 'results.jsonl');
   let text = '';
   try {
     const stat = fs.statSync(file);
@@ -35,7 +58,7 @@ function tailResults() {
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     try {
-      const record = JSON.parse(line);
+      const record = normalizeRecord(JSON.parse(line), state.results.length + 1);
       const lite = liteRecord(record);
       state.results.push(lite);
       broadcast('item_result', lite);
@@ -45,16 +68,21 @@ function tailResults() {
 
 function handleStdout(chunk) {
   state.stdoutBuffer += chunk.toString('utf8');
-  const outMatch = state.stdoutBuffer.match(/# cikti=([^\s]+)/u);
-  if (outMatch && !state.outDir) {
-    state.outDir = outMatch[1];
-    broadcast('run_meta', { out_dir: state.outDir, run_id: state.outDir.split('/').slice(-2).join('/') });
-    state.tailTimer = setInterval(tailResults, 600);
+  // Betik kendi çıktı klasörünü bildirebilir ('# output=<dir>' ya da e2e-chat
+  // düzenindeki '# cikti=<dir>'); bildirmezse Squirrel'in verdiği klasör kullanılır.
+  const outMatch = state.stdoutBuffer.match(/# (?:cikti|output)=([^\s]+)/u);
+  if (outMatch && !state.outDirAnnounced) {
+    state.outDirAnnounced = true;
+    state.outDir = path.isAbsolute(outMatch[1]) ? outMatch[1] : path.join(REPO_ROOT || process.cwd(), outMatch[1]);
+    state.tailOffset = 0;
+    broadcast('run_meta', { out_dir: state.outDir, run_id: state.outDir.split(path.sep).slice(-2).join('/') });
   }
+  if (state.outDir && !state.tailTimer) state.tailTimer = setInterval(tailResults, 600);
   let match;
-  const startRe = /\[(\d+)\][^\n]*?gonderiliyor/gu;
+  // Madde başlangıcı: genel '# item=N' ya da e2e-chat düzenindeki '[N] … gonderiliyor'.
+  const startRe = /(?:^# item=(\d+)|\[(\d+)\][^\n]*?gonderiliyor)/gmu;
   while ((match = startRe.exec(state.stdoutBuffer)) !== null) {
-    const index = Number(match[1]);
+    const index = Number(match[1] || match[2]);
     const item = state.itemsByIndex.get(index);
     if (item && !item.announced) {
       item.announced = true;
@@ -72,7 +100,7 @@ function handleStdout(chunk) {
 
 function exportToDesktop() {
   if (!state.outDir) return null;
-  const source = path.join(REPO_ROOT, state.outDir);
+  const source = state.outDir;
   const stamp = new Date().toISOString().replace(/[:T]/gu, '-').slice(0, 16);
   const target = path.join(DESKTOP_OUT, `${state.dataset}-${stamp}`);
   fs.mkdirSync(target, { recursive: true });
@@ -98,38 +126,101 @@ function exportToDesktop() {
 }
 
 // ---------- harness koşusu ----------
+// Satır başına KEY=değer biçimindeki ortam değişkenlerini ayrıştırır.
+function parseEnvLines(raw) {
+  const env = {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [key, value] of Object.entries(raw)) if (/^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)) env[key] = String(value);
+    return env;
+  }
+  for (const line of String(raw || '').split('\n')) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/u);
+    if (match) env[match[1]] = match[2].replace(/^(['"])(.*)\1$/u, '$2');
+  }
+  return env;
+}
+
+// Ek argümanları boşluklara göre böler; tırnak içindeki boşluklar korunur.
+function splitArgs(raw) {
+  return (String(raw || '').match(/"[^"]*"|'[^']*'|\S+/gu) || []).map((part) => part.replace(/^(['"])(.*)\1$/u, '$2'));
+}
+
+// Betiği uzantısına göre çalıştıracak komut. JS betikleri Squirrel'in kendi
+// Node çalışma ortamıyla koşar (hedef makinede Node kurulu olması gerekmez).
+function interpreterFor(script) {
+  const ext = path.extname(script).toLowerCase();
+  if (['.mjs', '.js', '.cjs'].includes(ext)) return { command: process.execPath, args: [script], env: { ELECTRON_RUN_AS_NODE: '1' } };
+  if (ext === '.py') return { command: process.platform === 'win32' ? 'python' : 'python3', args: [script], env: {} };
+  if (ext === '.sh') return { command: '/bin/bash', args: [script], env: {} };
+  return { command: script, args: [], env: {} };
+}
+
+function datasetFileOf(dataset) {
+  const dir = path.join(DATASETS_DIR, dataset);
+  const name = DATASET_FILES.find((file) => fs.existsSync(path.join(dir, file)));
+  return name ? path.join(dir, name) : '';
+}
+
 export function startRun(options) {
   if (state.running) throw new Error('Zaten bir koşu sürüyor.');
-  if (!String(options.refreshToken || options.authToken || '').trim()) {
-    throw new Error("Oturum çerezi (_sid) boş — tarayıcıda localhost:8080'e girişten sonra DevTools → Application → Cookies → _sid değerini yapıştır.");
+  if (!harnessOk()) {
+    throw new Error('Test betiği bulunamadı — Canlı Test > "Klasör seç…" ile proje klasörünü, gerekirse "Betik seç…" ile projenin test betiğini göster.');
   }
-  if (!HARNESS || !fs.existsSync(HARNESS)) throw new Error('Harness bağlı değil — Ayarlar > Repo klasörü bölümünden (ya da bu formdaki "Klasör seç" ile) harness içeren repo klasörünü seç.');
-  const args = [HARNESS, '--dataset', options.dataset];
+  const e2eChat = HARNESS_KIND === 'e2e-chat';
+  if (e2eChat && !String(options.refreshToken || options.authToken || '').trim()) {
+    throw new Error('Oturum çerezi (_sid) boş — bu betik giriş için _sid ister; uygulamaya giriş yaptığın tarayıcıdan DevTools > Application > Cookies > _sid değerini yapıştır.');
+  }
+  const dataset = String(options.dataset || '');
+  if (!/^[A-Za-z0-9][A-Za-z0-9-_.]{0,80}$/u.test(dataset)) throw new Error('Geçerli bir dataset seç.');
+
+  const runner = interpreterFor(HARNESS);
+  const args = [...runner.args, '--dataset', dataset];
   if (options.from) args.push('--from', String(options.from));
   if (options.to) args.push('--to', String(options.to));
-  if (options.multiThread) args.push('--multi-thread');
-  if (options.thread) args.push('--thread', String(options.thread));
-  if (options.base) args.push('--base', String(options.base));
+  if (e2eChat) {
+    if (options.multiThread) args.push('--multi-thread');
+    if (options.thread) args.push('--thread', String(options.thread));
+    if (options.base) args.push('--base', String(options.base));
+  }
+  args.push(...splitArgs(options.args));
+
+  // Squirrel her koşuya kendi çıktı klasörünü verir; betik oraya
+  // results.jsonl yazar (e2e-chat düzeni kendi klasörünü '# cikti=' ile bildirir).
+  const stamp = new Date().toISOString().replace(/[:.]/gu, '-');
+  const outAbs = path.join(OUTPUT_DIR, dataset, stamp);
+  if (!e2eChat) fs.mkdirSync(outAbs, { recursive: true });
 
   Object.assign(state, {
-    running: true, dataset: options.dataset, startedAt: new Date().toISOString(),
-    outDir: null, results: [], tailOffset: 0, stdoutBuffer: '', exportPath: null,
+    running: true, dataset, startedAt: new Date().toISOString(),
+    outDir: e2eChat ? null : outAbs, outDirAnnounced: false,
+    results: [], tailOffset: 0, stdoutBuffer: '', exportPath: null,
     stopFlag: false, lastLines: [],
-    itemsByIndex: new Map(datasetItems(options.dataset).map((item) => [item.index, item])),
+    itemsByIndex: new Map(datasetItems(dataset).map((item) => [item.index, item])),
   });
 
-  const child = spawn(process.execPath, args, {
-    cwd: REPO_ROOT,
+  const child = spawn(runner.command, args, {
+    cwd: REPO_ROOT || path.dirname(HARNESS),
     env: {
       ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',            // Electron içinden node gibi çalış
-      MMX_REFRESH_TOKEN: options.refreshToken || '',
-      MMX_AUTH_TOKEN: options.authToken || '',
+      ...runner.env,
+      ...parseEnvLines(options.env),
+      SQUIRREL_DATASET: dataset,
+      SQUIRREL_DATASET_DIR: path.join(DATASETS_DIR, dataset),
+      SQUIRREL_DATASET_FILE: datasetFileOf(dataset),
+      SQUIRREL_OUT_DIR: outAbs,
+      SQUIRREL_PROJECT_DIR: REPO_ROOT,
+      SQUIRREL_FROM: String(options.from || ''),
+      SQUIRREL_TO: String(options.to || ''),
+      ...(e2eChat ? { MMX_REFRESH_TOKEN: options.refreshToken || '', MMX_AUTH_TOKEN: options.authToken || '' } : {}),
     },
   });
   state.child = child;
+  if (state.outDir) {
+    broadcast('run_meta', { out_dir: state.outDir, run_id: `${dataset}/${stamp}` });
+    state.tailTimer = setInterval(tailResults, 600);
+  }
   broadcast('run_started', {
-    dataset: options.dataset, from: options.from || 1, to: options.to || null,
+    dataset, from: options.from || 1, to: options.to || null,
     total: state.itemsByIndex.size, multi_thread: Boolean(options.multiThread),
   });
   const remember = (text) => {
@@ -289,7 +380,7 @@ export async function runGeneric(options) {
 
   Object.assign(state, {
     running: true, child: null, stopFlag: false, dataset: options.dataset,
-    startedAt: new Date().toISOString(), outDir: path.relative(REPO_ROOT, outAbs),
+    startedAt: new Date().toISOString(), outDir: outAbs,
     results: [], tailOffset: 0, stdoutBuffer: '', exportPath: null, lastLines: [],
     itemsByIndex: new Map(selected.map((item) => [item.index, item])),
   });

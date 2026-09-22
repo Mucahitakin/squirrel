@@ -130,6 +130,25 @@ ipcMain.handle('squirrel:pick-folder', async (event, title) => {
   });
   return result.canceled || !result.filePaths.length ? null : result.filePaths[0];
 });
+const FILE_FILTERS = {
+  script: [{ name: 'Test betiği', extensions: ['mjs', 'js', 'cjs', 'py', 'sh'] }],
+  package: [{ name: 'Squirrel proje paketi', extensions: ['zip'] }],
+};
+ipcMain.handle('squirrel:pick-file', async (event, title, kind) => {
+  const result = await dialog.showOpenDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: title || 'Dosya seç', buttonLabel: 'Seç', properties: ['openFile'],
+    filters: FILE_FILTERS[kind] || [],
+  });
+  return result.canceled || !result.filePaths.length ? null : result.filePaths[0];
+});
+ipcMain.handle('squirrel:save-file', async (event, title, defaultName) => {
+  const result = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender), {
+    title: title || 'Kaydet', buttonLabel: 'Kaydet',
+    defaultPath: path.join(app.getPath('desktop'), defaultName || 'proje.squirrel.zip'),
+    filters: FILE_FILTERS.package,
+  });
+  return result.canceled || !result.filePath ? null : result.filePath;
+});
 
 app.whenReady().then(async () => {
   try {

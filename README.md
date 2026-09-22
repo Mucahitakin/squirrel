@@ -62,6 +62,44 @@ Not on Node? Any language can integrate over the documented
 `POST /api/ingest` endpoint (see the zero-dependency Python example pattern in
 the SDK docs).
 
+## Run your own test script (harness)
+
+Pick **any project folder** in *Live Test → Test script*. Squirrel finds
+datasets in `datasets/` (one sub-folder per dataset with a
+`conversation_dataset.json`, `messages.json` or `messages.txt`) and your test
+script at `squirrel.harness.{mjs,js,py,sh}` — or point it at any script with
+**Pick script…**. JavaScript scripts run on Squirrel's bundled runtime, so the
+target machine needs no Node install.
+
+The contract is small:
+
+| Squirrel gives your script | Your script does |
+|---|---|
+| `--dataset <name>` (+ `--from`/`--to`, your extra args) | print `# item=<n>` when it starts an item (live progress) |
+| `SQUIRREL_DATASET_FILE`, `SQUIRREL_DATASET_DIR` | read the items |
+| `SQUIRREL_OUT_DIR` | append one JSON line per item to `SQUIRREL_OUT_DIR/results.jsonl` |
+| your env vars from the form (`API_URL=…`) | — |
+
+A result line needs only `{"index": 1, "input": "…", "output": "…"}`; add
+`status`, `duration_ms`, `tools`, `errors`, `thread` for richer traces.
+
+```js
+// squirrel.harness.mjs
+import fs from 'node:fs'; import path from 'node:path';
+const items = JSON.parse(fs.readFileSync(process.env.SQUIRREL_DATASET_FILE, 'utf8'));
+for (const item of items) {
+  console.log(`# item=${item.id}`);
+  const output = await callMyBot(item.prompt);          // your system
+  fs.appendFileSync(path.join(process.env.SQUIRREL_OUT_DIR, 'results.jsonl'),
+    JSON.stringify({ index: item.id, input: item.prompt, output }) + '\n');
+}
+```
+
+**Take it to another machine:** *Package project* zips the script and its
+datasets (layout preserved, no `node_modules`/`.git`/outputs); on the other
+machine *Import package…* unpacks it into Squirrel's own data folder, so it
+runs there without the original repository.
+
 ## Server / Docker (headless)
 
 The UI is a plain web app served by a dependency-free Node server — you can

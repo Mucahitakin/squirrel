@@ -136,6 +136,60 @@ const delDefault = await (await fetch(`${BASE}/api/project-delete`, { method: 'P
   body: JSON.stringify({ name: 'default' }) })).json();
 check('project.default_protected', delDefault.ok === false);
 
+// ---- 6. genel proje: herhangi bir klasör + kendi test betiği ----
+const fsm = await import('node:fs');
+const pathm = await import('node:path');
+const SANDBOX = process.env.SQUIRREL_TEST_SANDBOX;
+const post = async (route, body) => (await fetch(`${BASE}${route}`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+})).json();
+async function waitIdle() {
+  for (let i = 0; i < 100; i += 1) {
+    const st = await (await fetch(`${BASE}/api/state`)).json();
+    if (!st.running) return st;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  throw new Error('koşu bitmedi');
+}
+const proj = pathm.join(SANDBOX, 'ornek-proje');
+fsm.mkdirSync(pathm.join(proj, 'datasets', 'mini-2'), { recursive: true });
+fsm.writeFileSync(pathm.join(proj, 'datasets', 'mini-2', 'conversation_dataset.json'), JSON.stringify([
+  { id: 1, conversation_thread_id: 't1', prompt: 'bir' },
+  { id: 2, conversation_thread_id: 't1', prompt: 'iki' },
+]));
+// Sözleşme: SQUIRREL_DATASET_FILE'ı oku, '# item=N' bas, SQUIRREL_OUT_DIR/results.jsonl'e yaz.
+fsm.writeFileSync(pathm.join(proj, 'squirrel.harness.mjs'), `
+import fs from 'node:fs'; import path from 'node:path';
+const items = JSON.parse(fs.readFileSync(process.env.SQUIRREL_DATASET_FILE, 'utf8'));
+for (const it of items) {
+  console.log('# item=' + it.id);
+  fs.appendFileSync(path.join(process.env.SQUIRREL_OUT_DIR, 'results.jsonl'), JSON.stringify({
+    index: it.id, input: it.prompt, output: process.env.BOT + ':' + it.prompt + ':' + process.argv.includes('--hizli'),
+  }) + '\\n');
+}
+`);
+const pj = await post('/api/config', { repo_root: proj });
+check('project.generic_select', pj.ok && pj.harness_kind === 'custom' && pj.datasets_in_project, JSON.stringify({ kind: pj.harness_kind }));
+const bad = await post('/api/config', { repo_root: pathm.join(SANDBOX, 'yok-boyle-klasor') });
+check('project.missing_folder_rejected', bad.ok === false);
+const runGen = await post('/api/run', { dataset: 'mini-2', env: 'BOT=botx', args: '--hizli' });
+const stGen = await waitIdle();
+const outs = (stGen.results || []).map((r) => r.agent_text);
+check('harness.generic_run', runGen.ok && outs.join('|') === 'botx:bir:true|botx:iki:true', outs.join('|'));
+check('harness.no_write_into_project', !fsm.existsSync(pathm.join(proj, 'output')));
+
+// ---- 7. proje paketi: dışa aktar → temizle → içe aktar → repo olmadan koş ----
+const zip = pathm.join(SANDBOX, 'ornek-proje.squirrel.zip');
+const exp = await post('/api/project-export', { dest: zip });
+check('package.export', exp.ok && fsm.existsSync(zip), JSON.stringify(exp).slice(0, 80));
+fsm.rmSync(proj, { recursive: true, force: true }); // orijinal proje artık yok
+const imp = await post('/api/project-import', { file: zip });
+check('package.import', imp.ok && imp.harness_kind === 'custom' && imp.repo_root.includes(`${pathm.sep}projects${pathm.sep}`), imp.error || '');
+await post('/api/run', { dataset: 'mini-2', env: 'BOT=paket' });
+const stImp = await waitIdle();
+check('package.runs_without_repo', (stImp.results || []).length === 2 && stImp.results[0].agent_text.startsWith('paket:'));
+await post('/api/config', { repo_root: '' });
+
 // ---- temizlik ----
 await fetch(`${BASE}/api/dataset-delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'sqtest-tmp' }) });
 

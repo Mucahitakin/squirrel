@@ -5,9 +5,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  PORT, UI_DIR, ASSETS_DIR, CONFIG_FILE, DESKTOP_OUT, REPO_ROOT,
-  OUTPUT_DIR, API_KEY, readJson, liveConfig, findRepoRoot, setRepoRoot, repoOk,
+  PORT, UI_DIR, ASSETS_DIR, CONFIG_FILE, DESKTOP_OUT,
+  OUTPUT_DIR, API_KEY, readJson, liveConfig, findProjectRoot, setProject, describeProject,
 } from './env.mjs';
+import { exportProject, importProject } from './packages.mjs';
 import {
   loadProjects, createProject, deleteProject, rotateProjectKey, projectByKey, projectOfRun,
 } from './projects.mjs';
@@ -160,31 +161,35 @@ async function route(req, res) {
     const body = await readBody(req);
     try {
       const next = { ...readJson(CONFIG_FILE, {}) };
-      let repo = null;
-      if (body.repo_root !== undefined) {
-        const wanted = String(body.repo_root || '').trim();
-        // Boş = repo bağlantısını kaldır (bağımsız kip). Dolu = harness içeren
-        // klasör olmalı; alt klasör seçildiyse repo kökü kendiliğinden bulunur.
-        const root = wanted ? findRepoRoot(wanted) : '';
-        if (root === null) {
-          return json(res, 400, {
-            ok: false,
-            error: `Bu klasörde harness bulunamadı (scripts/e2e-chat-harness/run-chat-suite.mjs). Repo'nun ana klasörünü seç: ${wanted}`,
-          });
+      let project = null;
+      if (body.repo_root !== undefined || body.harness_script !== undefined) {
+        if (state.running) return json(res, 409, { ok: false, error: 'Koşu sürerken proje değiştirilemez.' });
+        if (body.repo_root !== undefined) {
+          const wanted = String(body.repo_root || '').trim();
+          // Boş = proje bağlantısını kaldır (bağımsız kip). Dolu = var olan herhangi bir klasör.
+          const root = wanted ? findProjectRoot(wanted) : '';
+          if (root === null) return json(res, 400, { ok: false, error: `Klasör bulunamadı: ${wanted}` });
+          next.repo_root = root;
+          next.harness_script = ''; // yeni projede betik yeniden otomatik bulunur
         }
-        if (state.running) return json(res, 409, { ok: false, error: 'Koşu sürerken repo değiştirilemez.' });
-        next.repo_root = root;
-        repo = setRepoRoot(root); // yeniden başlatma gerekmez
+        if (body.harness_script !== undefined) {
+          const script = String(body.harness_script || '').trim();
+          if (script && !(fs.existsSync(script) && fs.statSync(script).isFile())) {
+            return json(res, 400, { ok: false, error: `Betik dosyası bulunamadı: ${script}` });
+          }
+          next.harness_script = script;
+        }
+        project = setProject(next.repo_root || '', next.harness_script || ''); // yeniden başlatma gerekmez
         invalidateArchiveList();
       }
       if (body.live_ingest !== undefined) next.live_ingest = Boolean(body.live_ingest);
       fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2));
-      return json(res, 200, { ok: true, needs_restart: false, ...(repo || {}) });
+      return json(res, 200, { ok: true, needs_restart: false, ...(project || {}) });
     } catch (error) { return json(res, 400, { ok: false, error: error.message }); }
   }
   if (routePath === '/api/config') {
     return json(res, 200, {
-      repo_root: REPO_ROOT, repo_ok: repoOk(),
+      ...describeProject(),
       desktop_out: DESKTOP_OUT, datasets: listDatasets(),
       api_key: API_KEY, ingest_url: `http://localhost:${PORT}/api/ingest`,
       live_ingest: liveConfig().live_ingest !== false,
@@ -359,6 +364,25 @@ async function route(req, res) {
     catch (error) { return json(res, 400, { ok: false, error: error.message }); }
   }
 
+  // ---- proje paketi (taşınabilir betik + dataset'ler) ----
+  if (routePath === '/api/project-export' && req.method === 'POST') {
+    const body = await readBody(req);
+    try { return json(res, 200, { ok: true, ...(await exportProject(String(body.dest || ''))) }); }
+    catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+  }
+  if (routePath === '/api/project-import' && req.method === 'POST') {
+    const body = await readBody(req);
+    if (state.running) return json(res, 409, { ok: false, error: 'Koşu sürerken proje değiştirilemez.' });
+    try {
+      const { root, harness } = await importProject(String(body.file || ''));
+      const next = { ...readJson(CONFIG_FILE, {}), repo_root: root, harness_script: harness };
+      fs.writeFileSync(CONFIG_FILE, JSON.stringify(next, null, 2));
+      const project = setProject(root, harness);
+      invalidateArchiveList();
+      return json(res, 200, { ok: true, ...project });
+    } catch (error) { return json(res, 400, { ok: false, error: error.message }); }
+  }
+
   // ---- canlı koşu ----
   if (routePath === '/api/state') {
     return json(res, 200, {
@@ -377,6 +401,8 @@ async function route(req, res) {
         thread: body.thread || null,
         base: body.base || null,
         refreshToken: body.refresh_token || '',
+        env: body.env || '',
+        args: body.args || '',
       });
       return json(res, 200, { ok: true });
     } catch (error) { return json(res, 400, { ok: false, error: error.message }); }
