@@ -224,6 +224,12 @@ async function preflightE2E(base) {
     throw new Error(`API adresine ulaşılamıyor: ${url} — backend çalışıyor mu, adres doğru mu? (Adres ${url.endsWith('/api') ? 'biçimi doğru görünüyor' : "genelde .../api ile biter"}.)`);
   }
   if (runtime === 404 && (await probe('/langgraph/api/threads')) === 404) {
+    // Backend daha yeni de olabilir: eski uçlar kaldırılmış, yerine harness
+    // API'si gelmiş olabilir. O zaman hata "betik eski"dir, "backend eski" değil.
+    const modern = await probe('/harness/v1/ready');
+    if (modern && modern !== 404) {
+      throw new Error(`Seçili test betiği bu backend için eski: betik ${url}/assistant/v2 + /langgraph kullanıyor ama backend ${url}/harness/v1 sunuyor. Bu backend için yazılmış test betiğini seç (Betik seç… / Paket içe aktar…).`);
+    }
     throw new Error(`Bu backend sürümü testin beklediği API'yi içermiyor: ${url}/assistant/v2 ve ${url}/langgraph adresleri 404 veriyor. Backend'i test betiğiyle aynı sürüme getir (ya da o sürümün kendi test betiğini seç).`);
   }
 }

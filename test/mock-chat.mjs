@@ -26,6 +26,8 @@ http.createServer(async (req, res) => {
     validTokens.add(token);
     return json(res, 200, { data: { access_token: token } });
   }
+  // Yeni sürüm backend taklidi: eski uçlar yok, harness API'si var.
+  if (req.url === '/yeni-surum/harness/v1/ready') return json(res, 401, { error: 'token gerekli' });
   // e2e-chat ön kontrolünün baktığı adresler: tokensız istekte 401 = adres var.
   if (req.url === '/assistant/runtime' || req.url === '/langgraph/api/threads') {
     return json(res, 401, { error: 'Access token gerekli' });

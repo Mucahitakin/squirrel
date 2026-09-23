@@ -235,6 +235,8 @@ check('e2e.run_in_archive', (arcE2E.runs || []).some((r) => r.id.startsWith('gor
 await waitIdle();
 const wrongVersion = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'x', base: 'http://localhost:4977/eski-surum' });
 check('e2e.preflight_wrong_backend', wrongVersion.ok === false && /API/u.test(wrongVersion.error || ''), (wrongVersion.error || '').slice(0, 60));
+const staleScript = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'x', base: 'http://localhost:4977/yeni-surum' });
+check('e2e.preflight_stale_script', staleScript.ok === false && /bu backend için eski/u.test(staleScript.error || ''), (staleScript.error || '').slice(0, 55));
 const unreachable = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'x', base: 'http://localhost:4499/api' });
 check('e2e.preflight_unreachable', unreachable.ok === false && /ulaşılamıyor/u.test(unreachable.error || ''), (unreachable.error || '').slice(0, 50));
 await post('/api/config', { repo_root: '' });
