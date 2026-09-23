@@ -303,3 +303,35 @@
 .repoBox.ok .repoBoxTxt b{color:var(--ok)}
 .repoBox.bad .repoBoxTxt b{color:var(--warn)}
 .repoBoxTxt span{font:10px var(--mono);color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- Threads: balon altı tur detayı ---------- */
+.bubbleWrap{max-width:min(760px,82%);display:flex;flex-direction:column;gap:6px;min-width:0}
+.bubbleRow .bubbleWrap .bubble{max-width:100%}
+.bubble.asst{cursor:pointer}
+.bubble.asst.opened{border-color:var(--accent)}
+.bubbleMeta .mTool{color:#9db4e8}
+.bubbleMeta .mErr{color:var(--err);font-weight:700}
+.thrDet{background:var(--card2);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:9px}
+.thrDetHead{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted);font:10.5px var(--mono)}
+.thrDetRow{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.thrDetRow>b{font-size:9.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.6px;min-width:62px;padding-top:3px}
+.tchips{display:flex;flex-wrap:wrap;gap:5px;min-width:0}
+.tchip{font:10px var(--mono);background:var(--okbg);color:var(--ok);border:1px solid rgba(47,191,130,.3);
+  border-radius:5px;padding:1px 7px}
+.tchip.bad{background:var(--errbg);color:var(--err);border-color:rgba(239,103,103,.35)}
+.tchip b{font-weight:600;opacity:.7}
+.tdim{color:var(--faint);font-size:11px}
+.terr{background:var(--errbg);border:1px solid rgba(239,103,103,.35);border-radius:7px;padding:5px 8px;
+  color:#f0b6b6;font-size:11px;margin-bottom:4px;word-break:break-word}
+.terr code{color:#ffb4b4}
+.tevs{flex:1;min-width:0;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.tev{display:flex;gap:8px;font:10px var(--mono);align-items:baseline}
+.tevT{min-width:118px}
+.tevO{color:var(--faint);min-width:50px;text-align:right}
+.tevP{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0}
+/* iz paneli açıkken konuşma listesi gizlenir, sohbet okunur kalır */
+#vThr.tracing #thrSide{display:none}
+#vThr .thrOnly{display:none}
+#vThr.tracing .thrOnly{display:inline-flex}
+#vThr .tableWrap{min-width:330px}

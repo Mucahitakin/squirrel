@@ -395,7 +395,7 @@ function closePanels(){
   $('trace').classList.remove('open');$('detail').classList.remove('open');
   if(selRow){selRow.classList.remove('sel');selRow=null;}
 }
-$('detailClose').onclick=closePanels;
+$('detailClose').onclick=()=>{closePanels();$('vThr').classList.remove('tracing');};
 
 /* ---------- THREADS (konuşma görünümü) ---------- */
 let thrData=[],thrSel=null;
@@ -418,6 +418,62 @@ function renderThreadList(){
   });
 }
 $('thrSearch').addEventListener('input',renderThreadList);
+// iz paneli açıkken konuşma listesine dönüş
+$('thrListBtn').onclick=()=>{$('vThr').classList.remove('tracing');$('trace').classList.remove('open');$('detail').classList.remove('open');};
+const thrDetailCache = new Map();
+function thrTokens(events){
+  let input=0,output=0;
+  for(const e of events||[]){
+    const p=String(e.payload||'');
+    for(const m of p.matchAll(/"(input_tokens|prompt_tokens)":\s*(\d+)/g))input+=Number(m[2]);
+    for(const m of p.matchAll(/"(output_tokens|completion_tokens)":\s*(\d+)/g))output+=Number(m[2]);
+  }
+  return{input,output};
+}
+// Balonun altında açılan tur detayı: araç zinciri, token, hatalar, olay akışı.
+function thrDetailHtml(d){
+  const tools=(d.tools||[]).map(t=>{
+    const bad=t.status==='error';
+    return `<span class="tchip${bad?' bad':''}">${esc(t.capability)}${t.duration_ms?` <b>${t.duration_ms}ms</b>`:''}</span>`;
+  }).join('')||'<span class="tdim">araç çağrısı yok</span>';
+  const errs=(d.errors||[]).map(e=>
+    `<div class="terr"><code>${esc(e.code||e.type||'error')}</code> ${esc(String(e.message||'').slice(0,400))}</div>`).join('');
+  const tok=thrTokens(d.events);
+  const t0=Date.parse(d.started_at||'')||null;
+  const evs=(d.events||[]).slice(0,40).map(e=>{
+    const at=Date.parse(e.at||'');
+    const off=t0&&!isNaN(at)?`+${((at-t0)/1000).toFixed(2)}s`:'';
+    let payload=String(e.payload||'');
+    if(payload==='{}')payload='';
+    return `<div class="tev"><span class="tevT" style="color:${spanColor(e.type)}">${esc(e.type)}</span>
+      <span class="tevO">${off}</span><span class="tevP" title="${esc(payload.slice(0,600))}">${esc(payload.slice(0,110))}</span></div>`;
+  }).join('');
+  const meta=[
+    d.duration_s!=null?`${d.duration_s} sn`:'',
+    (tok.input||tok.output)?`${fmtNum(tok.input)}+${fmtNum(tok.output)} token`:'',
+    (d.attachments_sent||[]).length?`${d.attachments_sent.length} ek`:'',
+    d.category?esc(d.category):'',
+  ].filter(Boolean).join(' · ');
+  return `<div class="thrDet">
+    <div class="thrDetHead">${meta}${d.metadata?`<span class="tdim">${esc(JSON.stringify(d.metadata).slice(0,80))}</span>`:''}</div>
+    <div class="thrDetRow"><b>Araçlar</b><div class="tchips">${tools}</div></div>
+    ${errs?`<div class="thrDetRow"><b>Hatalar</b><div>${errs}</div></div>`:''}
+    <div class="thrDetRow"><b>Olaylar</b><div class="tevs">${evs||'<span class="tdim">olay yok</span>'}</div></div>
+  </div>`;
+}
+async function toggleThrDetail(box,run,index){
+  const open=box.nextElementSibling&&box.nextElementSibling.classList.contains('thrDet');
+  if(open){box.nextElementSibling.remove();box.classList.remove('opened');return;}
+  box.classList.add('opened');
+  const key=`${run}#${index}`;
+  let d=thrDetailCache.get(key);
+  if(!d){
+    const res=await fetch(`/api/turn?id=${encodeURIComponent(run)}&index=${index}`);
+    if(!res.ok){box.insertAdjacentHTML('afterend','<div class="thrDet"><span class="tdim">detay alınamadı</span></div>');return;}
+    d=await res.json();thrDetailCache.set(key,d);
+  }
+  box.insertAdjacentHTML('afterend',thrDetailHtml(d));
+}
 async function openThread(id){
   thrSel=id;renderThreadList();
   const data=await (await fetch(`/api/thread?id=${encodeURIComponent(id)}`)).json();
@@ -431,16 +487,22 @@ async function openThread(id){
       html+=`<div class="thrRunSep"><span>${esc(t.run)}</span></div>`;
     }
     const[s,label]=stateOf(t);
+    const toolNames=(t.tools||[]).map(x=>x.capability);
+    const errCodes=(t.error_codes||[]);
     html+=`<div class="bubbleRow user"><div class="bubble user">${esc(t.user||'')}</div></div>`;
-    html+=`<div class="bubbleRow"><div class="bubble asst${s==='err'?' err':''}">${esc(t.agent_text||label)}
+    html+=`<div class="bubbleRow"><div class="bubbleWrap"><div class="bubble asst${s==='err'?' err':''}" data-run="${esc(t.run)}" data-i="${t.index}" title="detay için tıkla">${esc(t.agent_text||label)}
       <div class="bubbleMeta">${stIcon(s)}<span>#${t.index}</span>${t.duration_s!=null?`<span>${t.duration_s}s</span>`:''}
-        ${(t.tools||[]).length?`<span>${t.tools.length} tool</span>`:''}
+        ${toolNames.length?`<span class="mTool">${esc(toolNames.slice(0,3).join(', '))}${toolNames.length>3?` +${toolNames.length-3}`:''}</span>`:''}
+        ${errCodes.length?`<span class="mErr">${esc(errCodes.slice(0,2).join(', '))}</span>`:''}
         ${scoreChips(t)}${tagChips(t,2)}
-        <span class="lnk" data-run="${esc(t.run)}" data-i="${t.index}">izi aç</span></div></div></div>`;
+        <span class="lnk" data-run="${esc(t.run)}" data-i="${t.index}">yan panelde aç</span></div></div></div></div>`;
   }
   $('thrChat').innerHTML=html||'<div id="emptyThr" style="margin:60px auto;text-align:center;color:var(--faint)">Bu thread için tur bulunamadı.</div>';
   $('thrChat').querySelectorAll('.lnk').forEach(el=>{
-    el.onclick=()=>openTrace(el.dataset.run,Number(el.dataset.i));
+    el.onclick=(ev)=>{ev.stopPropagation();$('vThr').classList.add('tracing');openTrace(el.dataset.run,Number(el.dataset.i));};
+  });
+  $('thrChat').querySelectorAll('.bubble.asst').forEach(el=>{
+    el.onclick=()=>toggleThrDetail(el,el.dataset.run,Number(el.dataset.i));
   });
   $('thrChat').scrollTop=0;
 }
