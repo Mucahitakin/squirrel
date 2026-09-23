@@ -26,6 +26,10 @@ http.createServer(async (req, res) => {
     validTokens.add(token);
     return json(res, 200, { data: { access_token: token } });
   }
+  // e2e-chat ön kontrolünün baktığı adresler: tokensız istekte 401 = adres var.
+  if (req.url === '/assistant/runtime' || req.url === '/langgraph/api/threads') {
+    return json(res, 401, { error: 'Access token gerekli' });
+  }
   if (req.url === '/chat-key') {
     if (req.headers['x-my-key'] !== 'KEY-42') return json(res, 401, { error: 'bad key' });
     return json(res, 200, { data: { reply: `key-ok: ${b.message}` } });

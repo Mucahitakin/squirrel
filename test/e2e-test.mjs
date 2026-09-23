@@ -224,13 +224,19 @@ fsm.writeFileSync(pathm.join(ownDs, 'conversation_dataset.json'), JSON.stringify
 ]));
 const sel = await post('/api/config', { repo_root: loose });
 check('e2e.loose_script_recognized', sel.ok && sel.harness_kind === 'e2e-chat', sel.harness_kind);
-const runE2E = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'SID-9' });
+const runE2E = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'SID-9', base: 'http://localhost:4977' });
 const stE2E = await waitIdle();
 const e2eOut = (stE2E.results || []).map((r) => r.agent_text).join('|');
 check('e2e.dataset_via_file_with_attachments', runE2E.ok && e2eOut === 'sid=SID-9 ek=true', e2eOut || runE2E.error);
 check('e2e.no_output_in_user_folders', !fsm.existsSync(pathm.join(SANDBOX, 'output')) && !fsm.existsSync(pathm.join(loose, 'output')));
 const arcE2E = await (await fetch(`${BASE}/api/archive`)).json();
 check('e2e.run_in_archive', (arcE2E.runs || []).some((r) => r.id.startsWith('gorsel-1/')));
+// Ön kontrol: yanlış sürüm / ulaşılamayan adres koşu başlamadan anlaşılır olmalı.
+await waitIdle();
+const wrongVersion = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'x', base: 'http://localhost:4977/eski-surum' });
+check('e2e.preflight_wrong_backend', wrongVersion.ok === false && /API/u.test(wrongVersion.error || ''), (wrongVersion.error || '').slice(0, 60));
+const unreachable = await post('/api/run', { dataset: 'gorsel-1', refresh_token: 'x', base: 'http://localhost:4499/api' });
+check('e2e.preflight_unreachable', unreachable.ok === false && /ulaşılamıyor/u.test(unreachable.error || ''), (unreachable.error || '').slice(0, 50));
 await post('/api/config', { repo_root: '' });
 
 // ---- temizlik ----

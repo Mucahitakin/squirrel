@@ -393,7 +393,7 @@ async function route(req, res) {
   if (routePath === '/api/run' && req.method === 'POST') {
     const body = await readBody(req);
     try {
-      startRun({
+      await startRun({
         dataset: String(body.dataset || ''),
         from: Number(body.from) || null,
         to: Number(body.to) || null,

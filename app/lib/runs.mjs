@@ -207,7 +207,28 @@ function datasetFileOf(dataset) {
   return name ? path.join(dir, name) : '';
 }
 
-export function startRun(options) {
+// e2e-chat ön kontrolü: koşuyu başlatmadan önce API adresinin ayakta ve
+// betiğin beklediği sürümde olduğunu doğrular. Tokensız istekte 401 = adres
+// var, 404 = backend bu API'yi içermiyor. Böylece kullanıcı yarım koşu ve
+// ham yığın izi yerine net bir mesaj görür.
+async function preflightE2E(base) {
+  const url = String(base || 'http://localhost:3009/api').replace(/\/+$/u, '');
+  const probe = async (route) => {
+    try {
+      const response = await fetch(url + route, { signal: AbortSignal.timeout(6000) });
+      return response.status;
+    } catch { return 0; }
+  };
+  const runtime = await probe('/assistant/runtime');
+  if (runtime === 0) {
+    throw new Error(`API adresine ulaşılamıyor: ${url} — backend çalışıyor mu, adres doğru mu? (Adres ${url.endsWith('/api') ? 'biçimi doğru görünüyor' : "genelde .../api ile biter"}.)`);
+  }
+  if (runtime === 404 && (await probe('/langgraph/api/threads')) === 404) {
+    throw new Error(`Bu backend sürümü testin beklediği API'yi içermiyor: ${url}/assistant/v2 ve ${url}/langgraph adresleri 404 veriyor. Backend'i test betiğiyle aynı sürüme getir (ya da o sürümün kendi test betiğini seç).`);
+  }
+}
+
+export async function startRun(options) {
   if (state.running) throw new Error('Zaten bir koşu sürüyor.');
   if (!harnessOk()) {
     throw new Error('Test betiği bulunamadı — Canlı Test > "Klasör seç…" ile proje klasörünü, gerekirse "Betik seç…" ile projenin test betiğini göster.');
@@ -219,9 +240,10 @@ export function startRun(options) {
   const dataset = String(options.dataset || '');
   if (!/^[A-Za-z0-9][A-Za-z0-9-_.]{0,80}$/u.test(dataset)) throw new Error('Geçerli bir dataset seç.');
 
-  const e2e = e2eChat ? prepareE2E(dataset) : null;
-  const runner = interpreterFor(e2e ? e2e.script : HARNESS);
-  const args = [...runner.args, '--dataset', dataset, ...(e2e ? e2e.args : [])];
+  if (e2eChat) await preflightE2E(options.base);
+  const e2e = prepareE2E(dataset);
+  const runner = interpreterFor(e2eChat ? e2e.script : HARNESS);
+  const args = [...runner.args, '--dataset', dataset, ...(e2eChat ? e2e.args : [])];
   if (options.from) args.push('--from', String(options.from));
   if (options.to) args.push('--to', String(options.to));
   if (e2eChat) {
@@ -240,14 +262,14 @@ export function startRun(options) {
   Object.assign(state, {
     running: true, dataset, startedAt: new Date().toISOString(),
     outDir: e2eChat ? null : outAbs, outDirAnnounced: false,
-    outBase: e2e ? e2e.root : (REPO_ROOT || path.dirname(HARNESS)),
+    outBase: e2eChat ? e2e.root : (REPO_ROOT || path.dirname(HARNESS)),
     results: [], tailOffset: 0, stdoutBuffer: '', exportPath: null,
     stopFlag: false, lastLines: [],
     itemsByIndex: new Map(datasetItems(dataset).map((item) => [item.index, item])),
   });
 
   const child = spawn(runner.command, args, {
-    cwd: e2e ? e2e.root : (REPO_ROOT || path.dirname(HARNESS)),
+    cwd: e2eChat ? e2e.root : (REPO_ROOT || path.dirname(HARNESS)),
     env: {
       ...process.env,
       ...runner.env,
